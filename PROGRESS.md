@@ -11,10 +11,14 @@ at the top whenever a phase is finished or scope changes.
 
 ## Status
 
-- **Current phase**: Day 3 complete and visually verified.
-- **Last action**: Reworked the cloud overlay to fix three issues surfaced in visual review (pitch-black pre-dawn overcast, inverted-gradient morning overcast, giant sun blob through "rain"). Cloud is now a sun-height-driven uniform diffuse with in-scattering absorption.
-- **Next phase**: Day 4 — wet-stone PBR shader + glTF Campanile model load. See plan below.
-- **Blocked on**: Nothing. (Day 4 may need a Sketchfab placeholder if `assets/campanile.glb` isn't ready yet.)
+- **Current phase**: Day 3 complete, visually verified, and approved. Ready to start Day 4.
+- **Last action**: Day 3 realism pass landed and signed off — sun-extinction-driven cloud tint, weather-modulated lights (direct sun dims+cools under cloud, hemi color shifts from clear-sky blue to fog grey), dawn/dusk fog density bump, subtle two-frequency cloud breathing. `main.js` at exactly 200 lines.
+- **Next phase**: Day 4 — wet-stone PBR shader + glTF Campanile model load. Plan below is the spec.
+- **Blocked on**: Possibly the `assets/campanile.glb` asset itself. If it's not ready at session start, swap in a Sketchfab/Poly Haven placeholder model so the wet/dry pipeline stays end-to-end testable, and proceed. Do not wait on the asset.
+- **Pre-Day-4 reminders**:
+  - The Day 3 weather state (`current` from `src/weather.js`) is the canonical source for `wetness` — Day 4 adds `wetness` to each preset and to `SCALAR_KEYS`, and that's the entire wiring change to drive material wetness from weather.
+  - `clear` preset values are pinned to Day 2 sky defaults — do **not** retune them in Day 4.
+  - `main.js` is at the 200-line cap. If Day 4's loader + material patcher pushes it over, factor `loadCampanile` and the `onBeforeCompile` hook into a new `src/stone.js`.
 
 ---
 
@@ -277,6 +281,40 @@ under overcast gets a faint warm cast rather than a flat grey.
   before it's called, so the call moved to after `getSunDirection()` in
   `render()`.
 
+### Realism pass (still Day 3)
+
+After the screenshots looked correct but felt static / "lit wrong," four
+small additions were made — all within the no-noise, no-volumetrics, no-new-
+controls scope of the spec:
+
+- **Sky-derived cloud tint.** The cloud overlay used to lerp toward a
+  hand-tuned warm color at low sun. Now `cloudLight = sunExt + vec3(0.4)` —
+  the same atmospheric extinction along the sun ray that reddens clear
+  sunsets now drives the cloud color. Sunset under overcast is *physically*
+  warm-tinted instead of constant-tinted; noon overcast is neutral
+  automatically. ~3-line shader edit.
+- **Weather-modulated lights.** `directionalLight.intensity` multiplies by
+  `mix(1.0, 0.15, cloudCover)` so a thick cloud dims direct sun by ~85%.
+  `directionalLight.color` lerps toward a slight cool-white under cloud.
+  `hemi.color` lerps from the clear-sky blue (`0x87ceeb`) to the live fog
+  color — under overcast/rain, the "sky" lighting the ground IS the cloud
+  bottom, so the hemi color should match. `hemi.intensity` gets a 1.4×
+  boost under full cloud to fill in the now-soft shadows. Net: shadow
+  contrast naturally softens under cloud (no PCF/VSM tweaks needed),
+  ground desaturates and reads cool under rain.
+- **Time-of-day fog density modulation.** `fog.density *= mix(1.5, 1.0,
+  smoothstep(sun.y, 0.05, 0.4))` — fog is ~50% denser near dawn/dusk and
+  thins back to preset at midday. Sweeping `timeOfDay` 5→12 under overcast
+  now visibly "lifts" the fog through the morning.
+- **Cloud breathing.** `cloudCover` uniform gets a ±0.07 perturbation from
+  two incommensurate sines (`sin(t*0.13)*0.04 + sin(t*0.07)*0.03`) on top
+  of the lerped target. Below conscious perception per-frame but kills the
+  static feel of a perfectly uniform cloud layer. No procedural noise — just
+  one scalar wiggling over time.
+
+All four live in `pushWeatherToScene()` (and the cloud block of the sky
+shader). `main.js` is at 200 lines exactly.
+
 ### NOT done in Day 3 (intentional)
 
 - No rain particles — Day 6.
@@ -345,6 +383,31 @@ own BRDF is a lot of surface area for a one-week project.
 
 Default to A. Use B only with explicit justification.
 
+### Interaction with Day 3 (read before tuning)
+
+The Day 3 realism pass changed the lighting model in ways that affect what
+wet stone will *actually* look like under each weather state:
+
+- `directionalLight.intensity` is now multiplied by `mix(1.0, 0.15, cloudCover)`.
+  So under rain, the direct sun is at 15% strength. Wet stone's sharp
+  specular highlights from the direct sun will be *dimmer* than naively
+  expected — the most dramatic "wet rim highlights" will appear at
+  **clear → rain at sunrise/sunset** (dim grazing sun on freshly-wet
+  stone), not at rain noon.
+- `hemi.color` lerps toward the fog color under cloud. The ambient
+  bouncing on wet stone is now grey under rain, not blue. Helps verisimilitude
+  but means the cool-blue "wet" cast you might expect comes from the
+  *fog/cloud color choice*, not from the lighting.
+- `directionalLight.color` cools slightly under cloud. Specular highlights
+  on wet stone under rain will read very slightly cool — not a bug.
+- **Likely Day 4 follow-up: an env map for IBL.** Wet stone at roughness 0.25
+  will reflect *something*, and without `scene.environment` set that
+  something is black. Rendering the sky to a low-res `PMREMGenerator` cube
+  once per ~30 frames (or whenever weather/time changes by enough) gives
+  the wet stone the cloudy sky to reflect, which is the visual cue that
+  sells "wet" most strongly. If A's `onBeforeCompile` patch goes in clean,
+  add the env map immediately after — without it, wet stone looks plastic.
+
 ### Steps
 
 1. **Add `wetness` to the weather state.**
@@ -385,9 +448,17 @@ Default to A. Use B only with explicit justification.
 5. **Verification.**
    - Real (or placeholder) glTF visible centered on origin, ~94 m tall,
      casting and receiving shadows like the cylinder did.
-   - Switch `weather` clear → rain: stone gets noticeably darker and shinier
-     over ~1.5 s, specular highlights from the sun pop on rim/edges.
-   - rain → clear: dries out smoothly.
+   - Switch `weather` clear → rain: stone gets noticeably darker over
+     ~1.5 s. Roughness drop is verifiable at the clear/rain *boundary*
+     during sunrise (time ≈ 6.5–7.0): the dim grazing sun should produce
+     visibly sharper rim highlights on wet stone than on dry. **Do not**
+     verify wet specular at rain noon — direct sun is at 15% there, so
+     specular pop is intentionally muted.
+   - rain → clear: dries out smoothly. Highlights soften back toward
+     diffuse over ~1.5 s as roughness rises.
+   - If wet stone reads "plasticky" or pure-black on the shadowed side,
+     that's the missing env map (see Interaction note). Add IBL via
+     `PMREMGenerator` from the sky.
    - No new shader compile errors. Check browser console for
      `THREE.WebGLProgram` warnings.
 

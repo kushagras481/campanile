@@ -147,6 +147,9 @@ function onResize() {
 }
 
 const _sunDir = new THREE.Vector3();
+const _directColor = new THREE.Color();
+const _hemiSky = new THREE.Color();
+const _coolWhite = new THREE.Color(0.85, 0.88, 0.95);
 
 function render() {
   // Clock.getDelta() is destructive — call exactly once per frame.
@@ -159,11 +162,9 @@ function render() {
   sky.material.uniforms.sunDirection.value.copy(_sunDir);
 
   // Light orbits with the sun; the shadow camera looks from light → target,
-  // so the frustum naturally rotates to follow.
+  // so the frustum naturally rotates to follow. Intensity / color of both
+  // lights is set in pushWeatherToScene() (cloud-cover modulated).
   directionalLight.position.copy(_sunDir).multiplyScalar(SUN_DISTANCE);
-  directionalLight.intensity = Math.max(0, _sunDir.y);
-  // Floor at 0.25 keeps deep night visible after ACES tonemap; 0.1 read black.
-  hemi.intensity = THREE.MathUtils.lerp(0.25, 0.6, THREE.MathUtils.smoothstep(_sunDir.y, -0.1, 0.2));
 
   controls.update();
   renderer.render(scene, camera);
@@ -171,20 +172,29 @@ function render() {
 
 function pushWeatherToScene() {
   const u = sky.material.uniforms;
+  const cc = weatherCurrent.cloudCover;
   u.turbidity.value = weatherCurrent.turbidity;
   u.rayleigh.value = weatherCurrent.rayleigh;
   u.mieCoefficient.value = weatherCurrent.mieCoefficient;
   u.exposure.value = weatherCurrent.exposure;
-  u.cloudCover.value = weatherCurrent.cloudCover;
 
-  // FogExp2.color is a constant that doesn't respond to scene lighting —
-  // without modulation, dense rain fog reads as bright daylight-grey at
-  // midnight (no light source, but the fog color "emits" at its preset).
-  // Scale by sun height so fog only "lights up" when there's light to
-  // scatter through it. Same curve as the shader's cloud brightness so
-  // the sky-fog transition stays visually continuous.
+  // Cloud "breathing" — two incommensurate sines, ±0.07 amplitude. Below
+  // conscious perception but kills the static feel.
+  const t = clock.elapsedTime;
+  const wobble = Math.sin(t * 0.13) * 0.04 + Math.sin(t * 0.07) * 0.03;
+  u.cloudCover.value = THREE.MathUtils.clamp(cc + wobble, 0, 1);
+
+  // Fog: brightness from sun height (no daylight-grey midnight); density
+  // bumps ~1.5× near dawn/dusk to mimic morning fog lifting.
   const lit = THREE.MathUtils.smoothstep(_sunDir.y, -0.15, 0.25);
-  const fogBright = THREE.MathUtils.lerp(0.05, 1.0, lit);
-  scene.fog.color.copy(weatherCurrent.fogColor).multiplyScalar(fogBright);
-  scene.fog.density = weatherCurrent.fogDensity;
+  const fogTimeMul = THREE.MathUtils.lerp(1.5, 1.0, THREE.MathUtils.smoothstep(_sunDir.y, 0.05, 0.4));
+  scene.fog.color.copy(weatherCurrent.fogColor).multiplyScalar(THREE.MathUtils.lerp(0.05, 1.0, lit));
+  scene.fog.density = weatherCurrent.fogDensity * fogTimeMul;
+
+  // Direct sun dims+cools under cloud; hemi sky color shifts from blue to
+  // fog grey, intensity boosts slightly to fill the now-soft shadows.
+  directionalLight.intensity = Math.max(0, _sunDir.y) * THREE.MathUtils.lerp(1.0, 0.15, cc);
+  directionalLight.color.copy(_directColor.setRGB(1, 1, 1).lerp(_coolWhite, cc));
+  hemi.color.copy(_hemiSky.set(0x87ceeb).lerp(weatherCurrent.fogColor, cc));
+  hemi.intensity = THREE.MathUtils.lerp(0.25, 0.6, THREE.MathUtils.smoothstep(_sunDir.y, -0.1, 0.2)) * THREE.MathUtils.lerp(1.0, 1.4, cc);
 }

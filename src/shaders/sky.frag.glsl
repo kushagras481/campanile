@@ -138,12 +138,15 @@ void main() {
     float sunUp = sunDirection.y;
     float lit = smoothstep(-0.15, 0.25, sunUp);
     float cloudBright = mix(0.05, 0.7, lit);
-    // Warm-bias only near the horizon for sunrise/sunset; neutral above.
-    vec3 cloudTint = mix(vec3(1.0, 0.92, 0.78), vec3(1.0), smoothstep(0.0, 0.2, sunUp));
-    // Soft view-dependent brightening near the sun (cloud is optically
-    // thinner near the sun direction). Falls off fast — no disc.
+    // Cloud light = direct sun through the atmosphere (auto red-shifted at
+    // sunset by the same Rayleigh/Mie extinction that reddens clear sunsets)
+    // plus a small skylight floor so the layer doesn't go pitch black at
+    // night. Replaces the previous hand-tuned warm tint — physics, not eyes.
+    vec3 cloudLight = sunExt + vec3(0.4);
+    // Soft view-dependent brightening near the sun (cloud optically thinner
+    // along the sun direction). Falls off fast — no disc.
     float halo = pow(max(0.0, cosViewSun), 4.0) * 0.3 * lit;
-    vec3 cloudColor = (vec3(cloudBright) * cloudTint + vec3(halo)) * exposure;
+    vec3 cloudColor = (vec3(cloudBright) * cloudLight + vec3(halo)) * exposure;
     color = mix(color, cloudColor, cloudCover);
   }
 
