@@ -1,0 +1,22 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: #eee;
+}
+
+#scene {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Tweakpane sits in the top-right by default; nudge it away from the edge. */
+.tp-dfwv {
+  top: 12px !important;
+  right: 12px !important;
+}
