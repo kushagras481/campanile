@@ -151,6 +151,57 @@
       transform: translateY(-1px);
     }
 
+    .hero-cta-row {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ── RESOURCES BAR ── */
+    .resources-bar {
+      margin: 2.5rem 0 0;
+      padding: 1rem 1.25rem;
+      background: white;
+      border: 1px solid var(--mist);
+      border-left: 3px solid var(--gold);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 2rem;
+    }
+
+    .resource {
+      text-decoration: none;
+      color: inherit;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.55rem;
+      transition: color 0.2s;
+    }
+
+    .resource-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 400;
+    }
+
+    .resource-url {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--dusk);
+      border-bottom: 1px solid rgba(42,58,92,0.25);
+      padding-bottom: 1px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .resource:hover .resource-url {
+      color: var(--ink);
+      border-color: var(--gold);
+    }
+
     .scroll-hint {
       position: absolute;
       bottom: 2.5rem;
@@ -611,6 +662,46 @@
 
       main { max-width: none !important; padding: 0 !important; margin: 0 !important; }
 
+      /* Resources bar — keep prominent and clickable in print */
+      .resources-bar {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 0.4em 1.4em !important;
+        margin: 0 0 0.5em !important;
+        padding: 0.4em 0.6em !important;
+        background: #f7f3ec !important;
+        border: 0.5pt solid #bbb !important;
+        border-left: 1.5pt solid #b8922a !important;
+        page-break-inside: avoid;
+        break-inside: avoid;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .resource {
+        display: inline-flex !important;
+        align-items: baseline !important;
+        gap: 0.4em !important;
+        color: #000 !important;
+        text-decoration: none !important;
+      }
+      .resource-label {
+        font-family: 'DM Mono', monospace !important;
+        font-size: 6pt !important;
+        letter-spacing: 0.15em !important;
+        text-transform: uppercase !important;
+        color: #c4581f !important;
+        font-weight: 700 !important;
+      }
+      .resource-url {
+        font-family: 'DM Mono', monospace !important;
+        font-size: 7pt !important;
+        color: #2a3a5c !important;
+        text-decoration: underline !important;
+        border-bottom: none !important;
+        padding-bottom: 0 !important;
+        word-break: break-all;
+      }
+
       section {
         padding: 0.45em 0 0.35em !important;
         border-bottom: 0.5pt solid #bbb !important;
@@ -826,7 +917,10 @@
     <h1 class="hero-title">Campanile</h1>
     <div class="hero-subtitle">A Real-Time, Physically Based Renderer of Sather Tower</div>
     <div class="hero-authors">Shivani Wadhwa &nbsp;·&nbsp; Roopa Srinivas &nbsp;·&nbsp; Akshat Kishore &nbsp;·&nbsp; Kushagra Srivastava</div>
-    <a href="./demo.html" class="hero-cta">Launch Live Demo →</a>
+    <div class="hero-cta-row">
+      <a href="./demo.html" class="hero-cta">Launch Live Demo →</a>
+      <a href="https://drive.google.com/file/d/1cOAOo0Wr3m3ceqK8rpkuhsa_TgqQv8EH/view?usp=sharing" target="_blank" rel="noopener" class="hero-cta">View Slides →</a>
+    </div>
   </div>
   <div class="scroll-hint">
     <span>scroll</span>
@@ -851,6 +945,18 @@
 </nav>
 
 <main>
+
+  <!-- RESOURCES (links visible on screen and in print) -->
+  <div class="resources-bar" id="resources">
+    <a href="https://kushagras481.github.io/campanile/" target="_blank" rel="noopener" class="resource">
+      <span class="resource-label">Live Site →</span>
+      <span class="resource-url">https://kushagras481.github.io/campanile/</span>
+    </a>
+    <a href="https://drive.google.com/file/d/1cOAOo0Wr3m3ceqK8rpkuhsa_TgqQv8EH/view?usp=sharing" target="_blank" rel="noopener" class="resource">
+      <span class="resource-label">Slides →</span>
+      <span class="resource-url">https://drive.google.com/file/d/1cOAOo0Wr3m3ceqK8rpkuhsa_TgqQv8EH/view</span>
+    </a>
+  </div>
 
   <!-- ABSTRACT -->
   <section id="abstract">
