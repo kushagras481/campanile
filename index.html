@@ -657,7 +657,7 @@
           $$\sin\alpha = \sin\phi\,\sin\delta + \cos\phi\,\cos\delta\,\cos h$$
           <div class="equation-caption">N = day-of-year, φ = latitude, h = hour angle, δ = declination, α = altitude.</div>
         </div>
-        <p>The single-sine declination model is a deliberate simplification of the full NOAA SPA — sufficient for an interactive seasonal slider, validated to within ~1° at solstice noon and equinox sunrise.</p>
+        <p>The single-sine declination model is a deliberate simplification of the full NOAA SPA — sufficient for an interactive seasonal slider, validated to within ~1° at solstice noon and ~3° at equinox sunrise.</p>
       </div>
       <div class="tech-card">
         <div class="tech-card-num">02</div>
@@ -716,7 +716,7 @@
     <p><strong>Rain reading as an overlay rather than atmosphere.</strong> Our first rain pass rendered streak billboards with a fixed white tint. The result felt pasted on — the precipitation didn't read as part of the same lighting environment as the tower and sky. We fixed this by tinting each streak with the scene's live fog color every frame, so rain inherits the same atmospheric attenuation as everything else. A related problem — nighttime fog reading as daytime grey — was solved by coupling fog brightness to the sun's vertical position, so as the sun drops below the horizon the fog naturally darkens.</p>
 
     <h3>Deviations from References</h3>
-    <p>Several deliberate choices distinguish our implementation from the cited references. <strong>Solar position</strong> uses a single-sine declination model and ignores the equation of time — a subset of the full NOAA SPA, sufficient for an interactive seasonal slider but not for actuarial precision. <strong>Sky shading</strong> implements Preetham (1999) but not the Hosek-Wilkie (2012) successor, accepting the known twilight banding as a limitation. <strong>Stone material</strong> is patched into Three.js's standard PBR shader via <code>onBeforeCompile</code> rather than authored as a from-scratch BRDF or backed by photographed roughness/normal texture maps — chosen for iteration speed on a stylized look. <strong>Cloud "breathing"</strong> is a CPU-side amplitude modulation by two incommensurate sines (frequencies 0.07 and 0.13 Hz, amplitudes ±0.03 and ±0.04), which is not from any cited reference but proved necessary to eliminate the static feel of a fixed cloud cover value. And as described above, the geometry was hand-modeled in Blender rather than reconstructed via Meshroom photogrammetry as originally proposed.</p>
+    <p>Several deliberate choices distinguish our implementation from the cited references. <strong>Solar position</strong> uses a single-sine declination model and ignores the equation of time — a subset of the full NOAA SPA, sufficient for an interactive seasonal slider but not for actuarial precision. <strong>Sky shading</strong> implements Preetham (1999) but not the Hosek-Wilkie (2012) successor, accepting the known twilight banding as a limitation. <strong>Stone material</strong> is patched into Three.js's standard PBR shader via <code>onBeforeCompile</code> rather than authored as a from-scratch BRDF or backed by photographed roughness/normal texture maps — chosen for iteration speed on a stylized look. <strong>Cloud "breathing"</strong> is a CPU-side amplitude modulation by two incommensurate sines (angular frequencies 0.07 and 0.13 rad/s — periods of ~90 s and ~48 s — amplitudes ±0.03 and ±0.04), which is not from any cited reference but proved necessary to eliminate the static feel of a fixed cloud cover value. And as described above, the geometry was hand-modeled in Blender rather than reconstructed via Meshroom photogrammetry as originally proposed.</p>
   </section>
 
   <!-- RESULTS -->
@@ -749,40 +749,40 @@
 
     <!-- Group 2: Sunrise comparison -->
     <div class="result-group">
-      <div class="result-group-label">Sunrise — Shadow Comparison</div>
+      <div class="result-group-label">Morning — Shadow Comparison</div>
       <div class="result-pair">
-        <img src="sunrise_clear.png" alt="Sunrise clear with shadows" loading="lazy" />
-        <img src="sunrise_no_shadows.png" alt="Sunrise clear without shadows" loading="lazy" />
+        <img src="sunrise_clear.png" alt="Clear morning with shadows" loading="lazy" />
+        <img src="sunrise_no_shadows.png" alt="Clear morning without shadows" loading="lazy" />
       </div>
       <div class="caption-pair">
-        <div class="result-caption">With shadows enabled · The low-angle sun casts a long shadow reaching far west, and the shadow-map's normal bias suppresses Peter Panning on the tower's stepped base.</div>
-        <div class="result-caption">Shadows disabled · The same sunrise lighting without shadow casting, showing the raw sky and tower illumination from the Preetham shader and hemisphere light alone.</div>
+        <div class="result-caption">With shadows enabled · The low-angle morning sun casts a long shadow reaching far west, and the shadow-map's normal bias suppresses Peter Panning on the tower's stepped base.</div>
+        <div class="result-caption">Shadows disabled · The same morning lighting without shadow casting, showing the raw sky and tower illumination from the Preetham shader and hemisphere light alone.</div>
       </div>
     </div>
 
     <!-- Group 3: Sunrise vs overcast -->
     <div class="result-group">
-      <div class="result-group-label">Sunrise — Weather Comparison</div>
+      <div class="result-group-label">Morning — Weather Comparison</div>
       <div class="result-pair">
-        <img src="sunrise_clear.png" alt="Sunrise clear" loading="lazy" />
-        <img src="sunrise_overcast.png" alt="Sunrise overcast" loading="lazy" />
+        <img src="sunrise_clear.png" alt="Clear morning" loading="lazy" />
+        <img src="sunrise_overcast.png" alt="Overcast morning" loading="lazy" />
       </div>
       <div class="caption-pair">
-        <div class="result-caption">Clear sunrise · Day 172, 8:35 — warm Rayleigh teal horizon with sharp directional shadows on the ground plane.</div>
-        <div class="result-caption">Overcast sunrise · Same time and date — cloud cover interpolates the sky to a flat taupe, eliminates the sun disk, reduces shadow intensity by ~25%, and increases hemisphere fill light to preserve ambient brightness.</div>
+        <div class="result-caption">Clear morning · Day 172, 8:35 — Rayleigh-scattered blue zenith fading to a warmer horizon, with sharp directional shadows on the ground plane.</div>
+        <div class="result-caption">Overcast morning · Same time and date — cloud cover interpolates the sky to a flat taupe, eliminates the sun disk, reduces shadow intensity by ~25%, and increases hemisphere fill light to preserve ambient brightness.</div>
       </div>
     </div>
 
     <!-- Group 4: Summer vs winter 8pm -->
     <div class="result-group">
-      <div class="result-group-label">Seasonal Comparison — 8 PM</div>
+      <div class="result-group-label">Seasonal Comparison — 8 PM, Summer vs. Spring</div>
       <div class="result-pair">
         <img src="8_pm_in_summer.png" alt="8 PM in summer" loading="lazy" />
-        <img src="8_pm_in_winter.png" alt="8 PM in winter" loading="lazy" />
+        <img src="8_pm_in_winter.png" alt="8 PM in spring" loading="lazy" />
       </div>
       <div class="caption-pair">
-        <div class="result-caption">Summer (Day 187) · At 20:00 the sun is just setting on the summer solstice — a warm orange glow persists above the horizon, with the sun disk visible and ground still partially lit.</div>
-        <div class="result-caption">Winter (Day 100) · At 20:00 the sun set over an hour ago — the scene is fully dark with only moonlight and stars visible. Solar declination shifts the sunset ~1.5 hours earlier, a difference the date slider captures faithfully.</div>
+        <div class="result-caption">Summer (Day 187, ~July 6) · At 20:00 the sun is just setting — a warm orange glow persists above the horizon, with the sun disk visible and ground still partially lit.</div>
+        <div class="result-caption">Spring (Day 100, ~April 10) · At 20:00 the sun has just set and twilight has progressed to near-full dark — the moon and stars dominate. Solar declination shifts the early-April sunset roughly 50 minutes earlier than the early-July one, a difference the date slider captures faithfully.</div>
       </div>
     </div>
 
@@ -793,7 +793,7 @@
         <img src="sunset_clear.png" alt="Summer sunset" loading="lazy" />
       </div>
       <div class="result-caption">
-        Summer sunset · Day 172, 19:57 — the sun has descended below 5° elevation, triggering the Mie scattering regime in the sky shader. The large-particle glow produces the characteristic warm orange corona. Moonlight is not yet visible; the scene transitions to night through pure atmospheric scattering.
+        Summer sunset · Day 172, 19:57 — the sun has descended below 5° elevation. The horizon-grazing sun path passes through significantly more atmosphere, and Rayleigh and Mie extinction strip the shorter wavelengths preferentially, leaving the warm orange corona of the surviving longer-wavelength light. Moonlight is not yet visible; the scene transitions to night through atmospheric scattering and falloff alone.
       </div>
     </div>
 
@@ -844,7 +844,7 @@
     <ul class="lessons-list">
       <li>
         <span class="lesson-num">1</span>
-        <span class="lesson-text"><strong>Physical models expose their seams at extreme conditions.</strong> The Preetham sky model — which we validated against reference chromaticity charts at T = 2.5 — produces visible banding near the sun disk at very low elevations (below 2°). This is a known limitation of the analytical approximation; a full implementation would upgrade to the Hosek-Wilkie (2012) model for twilight. The lesson: validate early and at boundary conditions, not just at the "comfortable" midday case.</span>
+        <span class="lesson-text"><strong>Physical models expose their seams at extreme conditions.</strong> The Preetham sky model — sanity-checked against the paper's analytic equations and stable across most of its domain at T = 2.5 — produces visible banding near the sun disk at very low elevations (below 2°). This is a known limitation of the analytical approximation; a full implementation would upgrade to the Hosek-Wilkie (2012) model for twilight. The lesson: validate early and at boundary conditions, not just at the "comfortable" midday case.</span>
       </li>
       <li>
         <span class="lesson-num">2</span>
@@ -907,7 +907,7 @@
         <div class="team-role">Sky &amp; Atmosphere</div>
         <ul class="team-tasks">
           <li>Implemented the Preetham sky shader in GLSL</li>
-          <li>Validated sky chromaticity against Preetham et al. reference figures</li>
+          <li>Sanity-checked the Preetham implementation against the paper's analytic equations during development</li>
           <li>Designed and tuned all three weather presets</li>
           <li>Implemented exponential fog with time-of-day density variation</li>
           <li>Authored the milestone and final report writeup</li>
@@ -929,7 +929,7 @@
         <div class="team-role">Solar &amp; Lighting</div>
         <ul class="team-tasks">
           <li>Derived and implemented solar position equations (declination, hour angle, azimuth, altitude)</li>
-          <li>Validated azimuth/altitude within ~1° at solstice noon and equinox sunrise for Berkeley coordinates</li>
+          <li>Validated azimuth/altitude within ~1° at solstice noon and ~3° at equinox sunrise for Berkeley coordinates</li>
           <li>Built the dynamic directional light and shadow camera frustum system</li>
           <li>Implemented moonlight model (opposite solar vector, night/cloud modulation)</li>
           <li>Created the interactive Tweakpane UI and slider bindings</li>
