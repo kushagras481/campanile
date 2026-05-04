@@ -635,7 +635,7 @@
       <div>
         <p>We present a real-time, browser-based renderer of UC Berkeley's Campanile (Sather Tower) driven by physically accurate lighting simulation. Rather than relying on hand-tuned artistic values, every visual parameter — sky chromaticity, shadow direction and length, surface reflectance, rain, fog, and night lighting — derives from physical or astronomical models.</p>
         <p>The renderer exposes an interactive time-of-day slider, a day-of-year slider for seasonal variation, and selectable weather presets (clear, overcast, rain). The scene runs entirely in the browser via Three.js and WebGL 2.0, requiring no installation. The Campanile geometry was modeled in Blender with named architectural sub-components (pilasters, belfry shaft, windows) and rendered at 60 fps on consumer hardware.</p>
-        <p>Key technical contributions include a GPU Preetham sky shader parameterized by true solar azimuth and altitude computed from Berkeley's GPS coordinates, PCF soft shadow mapping driven by the live solar position, a dry/wet BRDF material system for the stone tower, a rain particle system with atmospheric scattering tints, exponential fog with time-of-day density variation, and a procedural lightning system. The result is a single interactive scene that authentically captures Sather Tower across dawn, noon, dusk, clear nights, overcast mornings, and thunderstorms.</p>
+        <p>Key technical contributions include a GPU Preetham sky shader parameterized by true solar azimuth and altitude computed from Berkeley's GPS coordinates, PCF soft shadow mapping driven by the live solar position, a dry/wet PBR material system for the stone tower, a rain particle system with atmospheric scattering tints, exponential fog with time-of-day density variation, and a procedural lightning system. The result is a single interactive scene that authentically captures Sather Tower across dawn, noon, dusk, clear nights, overcast mornings, and thunderstorms.</p>
       </div>
     </div>
   </section>
@@ -687,7 +687,7 @@
           $$\sigma(t) = \sigma_{\text{base}} \cdot \mathrm{lerp}\!\left(1.5,\, 1.0,\, \mathrm{smoothstep}(s_y;\, 0.05,\, 0.4)\right)$$
           <div class="equation-caption">σ = fog density, s_y = vertical component of sun direction. Density falls from 1.5× to 1× as the sun climbs above the horizon.</div>
         </div>
-        <p>The fog color is dimmed with the sun's elevation so nighttime fog reads dark rather than the daytime horizon color. A wet BRDF mode lowers stone roughness with the wetness scalar w ∈ [0, 1]:</p>
+        <p>The fog color is dimmed with the sun's elevation so nighttime fog reads dark rather than the daytime horizon color. A wet-stone mode interpolates the PBR material's roughness input with the wetness scalar w ∈ [0, 1]:</p>
         <div class="equation">
           $$r(w) = (1 - w)\,r_{\text{dry}} + w\,r_{\text{wet}} = 0.85 - 0.60\,w$$
           <div class="equation-caption">r_dry = 0.85 (matte stone), r_wet = 0.25 (rain-slicked, near-specular).</div>
@@ -830,7 +830,7 @@
       </div>
       <div class="caption-pair">
         <div class="result-caption">Top-angle view · Day 172, 15:00 — an overhead orbit camera angle reveals the stepped cornice geometry and the pyramid roof of the modeled mesh. The directional shadow from the roof spire falls correctly onto the belfry parapet, demonstrating that the shadow frustum is tightly fit to the tower bounds at this elevation angle.</div>
-        <div class="result-caption">Clock face close-up · Day 172, 15:00 — a close orbit view shows the UV-mapped stone texture on the upper shaft and the clock face geometry. The PBR MeshStandardMaterial captures diffuse surface variation across the stone panels; specular highlight falloff at the cornice edges reflects the hemisphere sky light color.</div>
+        <div class="result-caption">Clock face close-up · Day 172, 15:00 — a close orbit view shows the procedural stone shading on the upper shaft and the clock face geometry. The PBR MeshStandardMaterial captures diffuse surface variation across the stone panels (sin-noise stone patches, fine grain, and masonry course lines injected via <code>onBeforeCompile</code>); specular highlight falloff at the cornice edges reflects the hemisphere sky light color.</div>
       </div>
     </div>
 
@@ -919,7 +919,7 @@
         <ul class="team-tasks">
           <li>Modeled the Campanile geometry in Blender with named architectural sub-components</li>
           <li>Authored the procedural stone weathering shader (grain, masonry courses, runoff streaks) via <code>onBeforeCompile</code></li>
-          <li>Implemented dry/wet BRDF switching (roughness interpolation between dry and wet states)</li>
+          <li>Implemented dry/wet PBR material switching (roughness and diffuse interpolation between dry and wet states)</li>
           <li>Configured and tuned PCF shadow mapping parameters</li>
           <li>Set up GitHub Pages deployment and Vite build pipeline</li>
         </ul>
