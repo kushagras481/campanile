@@ -633,9 +633,8 @@
     <div class="abstract-body">
       <div class="abstract-rule"></div>
       <div>
-        <p>We present a real-time, browser-based renderer of UC Berkeley's Campanile (Sather Tower) driven by physically accurate lighting simulation. Rather than relying on hand-tuned artistic values, every visual parameter — sky chromaticity, shadow direction and length, surface reflectance, rain, fog, and night lighting — derives from physical or astronomical models.</p>
-        <p>The renderer exposes an interactive time-of-day slider, a day-of-year slider for seasonal variation, and selectable weather presets (clear, overcast, rain). The scene runs entirely in the browser via Three.js and WebGL 2.0, requiring no installation. The Campanile geometry was modeled in Blender with named architectural sub-components (pilasters, belfry shaft, windows) and rendered at 60 fps on consumer hardware.</p>
-        <p>Key technical contributions include a GPU Preetham sky shader parameterized by true solar azimuth and altitude computed from Berkeley's GPS coordinates, PCF soft shadow mapping driven by the live solar position, a dry/wet PBR material system for the stone tower, a rain particle system with atmospheric scattering tints, exponential fog with time-of-day density variation, and a procedural lightning system. The result is a single interactive scene that authentically captures Sather Tower across dawn, noon, dusk, clear nights, overcast mornings, and thunderstorms.</p>
+        <p>This is a real-time, browser-based renderer of UC Berkeley's Campanile (Sather Tower). Instead of art-directed values, the lighting comes from physical and astronomical models: the sun's position is computed from Berkeley's coordinates and the date, the sky uses the Preetham analytical model, and a live shadow camera tracks the sun every frame. The tower itself was hand-modeled in Blender, and its stone uses a procedural shader that interpolates between dry and rain-slicked states.</p>
+        <p>The full scene runs in the browser on Three.js + WebGL 2.0 and holds 60 fps on a consumer laptop. A small UI panel exposes a time-of-day slider, a day-of-year slider, and three weather presets (clear, overcast, rain), so the same model reads correctly at noon, at dusk, on a clear night, and during a thunderstorm with stochastic lightning.</p>
       </div>
     </div>
   </section>
@@ -645,49 +644,49 @@
     <div class="section-eyebrow">02 · Technical Approach</div>
     <h2>Systems &amp; Methods</h2>
 
-    <p>The renderer is structured as a set of loosely coupled subsystems, each responsible for one physical phenomenon. All subsystems are synchronized each frame to a common time-of-day and date, ensuring visual coherence across lighting, sky, shadows, weather, and materials.</p>
+    <p>The renderer is built as a set of loosely coupled subsystems — one per physical phenomenon (sun, sky, shadows, weather, materials). All of them read the same time-of-day and date each frame, so everything stays visually consistent.</p>
 
     <div class="tech-grid">
       <div class="tech-card">
         <div class="tech-card-num">01</div>
         <div class="tech-card-title">Solar Positioning</div>
-        <p>Sun azimuth and altitude are computed from first principles using standard solar geometry equations, anchored to Berkeley's GPS coordinates (37.87°N, 122.26°W) with a longitude correction and DST offset. The resulting unit vector drives the directional light, shadow camera frustum, and sky shader every frame.</p>
+        <p>The sun's azimuth and altitude are computed each frame from standard solar-geometry equations, anchored to Berkeley's coordinates (37.87°N, 122.26°W) with a longitude correction (Berkeley sits ~9 minutes east of the PST/PDT meridian) and a DST offset. The resulting unit vector drives the directional light, the shadow camera frustum, and the sky shader.</p>
         <div class="equation">
           $$\delta = 23.45° \,\sin\!\left(\tfrac{360°\,(284 + N)}{365}\right)$$
           $$\sin\alpha = \sin\phi\,\sin\delta + \cos\phi\,\cos\delta\,\cos h$$
           <div class="equation-caption">N = day-of-year, φ = latitude, h = hour angle, δ = declination, α = altitude.</div>
         </div>
-        <p>The single-sine declination model is a deliberate simplification of the full NOAA SPA — sufficient for an interactive seasonal slider, validated to within ~1° at solstice noon and ~3° at equinox sunrise.</p>
+        <p>We use a single-sine declination instead of the full NOAA SPA — accurate to ~1° at solstice noon and ~3° at equinox sunrise, which is plenty for a seasonal slider.</p>
       </div>
       <div class="tech-card">
         <div class="tech-card-num">02</div>
         <div class="tech-card-title">Preetham Sky Shader</div>
-        <p>A custom GPU sky dome renders the full atmosphere using the Preetham et al. (1999) analytical sky model. The fragment shader evaluates the per-pixel luminance distribution from the angle to the zenith and the angle to the sun, modulated by turbidity:</p>
+        <p>The sky dome is a custom GPU shader that implements the Preetham et al. (1999) analytical model. Per-pixel radiance is evaluated from the angle to the zenith and the angle to the sun, modulated by turbidity:</p>
         <div class="equation">
           $$F(\theta, \gamma) = (1 + A\,e^{B / \cos\theta})\,(1 + C\,e^{D\gamma} + E\,\cos^2\gamma)$$
           <div class="equation-caption">θ = angle from zenith, γ = angle from sun, A–E = turbidity-dependent coefficients (we use T = 2.5 for clear, T = 8 for storms).</div>
         </div>
-        <p>A procedural cloud layer is amplitude-modulated by two incommensurate sines on the CPU, $c(t) = c_0 + 0.04\,\sin(0.13\,t) + 0.03\,\sin(0.07\,t)$, adding gentle sub-perceptual "breathing" that kills the static feel of a fixed cloud-cover value.</p>
+        <p>A procedural cloud layer sits on top of the analytical sky, with the cloud-cover scalar amplitude-modulated each frame by two incommensurate sines: $c(t) = c_0 + 0.04\,\sin(0.13\,t) + 0.03\,\sin(0.07\,t)$. The motion is below the threshold of conscious perception, but it removes the dead, static feel a fixed cloud value would otherwise have.</p>
       </div>
       <div class="tech-card">
         <div class="tech-card-num">03</div>
         <div class="tech-card-title">Shadow Mapping</div>
-        <p>A 2048×2048 PCF soft shadow map is produced by a directional light whose position and frustum track the live solar direction. Shadow bias and normal bias are tuned to suppress Peter Panning at low sun elevations. Cloud cover continuously modulates shadow intensity — reducing it by up to 25% under full overcast — to match the soft, directionless nature of diffuse cloud lighting.</p>
+        <p>A 2048² PCF soft shadow map is produced by a directional light whose position and frustum follow the sun. Depth bias and normal bias are tuned together to suppress Peter Panning at low sun angles. Cloud cover continuously dampens shadow intensity — up to 25% under full overcast — since diffuse cloud light shouldn't cast a hard shadow.</p>
       </div>
       <div class="tech-card">
         <div class="tech-card-num">04</div>
         <div class="tech-card-title">Campanile Geometry</div>
-        <p>The Campanile mesh was hand-modeled in Blender as a set of named architectural sub-components (pilasters, belfry shaft, window frames, pyramid roof) and exported as a single glTF binary. The mesh is scaled to approximately the tower's real-world height (~94 m). A MeshStandardMaterial provides physically based rendering, with roughness modulated procedurally per-fragment to simulate stone grain, masonry courses, and weathering streaks rather than relying on prebaked texture maps.</p>
+        <p>The Campanile was hand-modeled in Blender, with each architectural element (pilasters, belfry shaft, windows, pyramid roof) kept as a named sub-component, then exported as a single glTF binary. After load, the mesh is scaled to ~94 m to match the real tower. Surface detail — stone grain, masonry courses, weathering streaks — is drawn procedurally in the fragment shader rather than from image textures, which made the look fast to iterate on (see Card 05 for the dry/wet system).</p>
       </div>
       <div class="tech-card">
         <div class="tech-card-num">05</div>
         <div class="tech-card-title">Weather &amp; Atmosphere</div>
-        <p>Three weather presets (clear, overcast, rain) smoothly interpolate fog color, fog density, cloud cover, turbidity, and rain strength. Exponential fog density is multiplicatively boosted near dawn and dusk to mimic morning mist:</p>
+        <p>Switching between the three presets (clear, overcast, rain) smoothly interpolates five scalars — fog color, fog density, cloud cover, turbidity, and rain strength — with a 1.5-second time constant, so transitions don't snap. Fog has two seasonal modulations: density gets up to a 1.5× boost near dawn and dusk to read as morning mist, and color is dimmed with the sun's height so nighttime fog reads dark instead of daytime grey.</p>
         <div class="equation">
           $$\sigma(t) = \sigma_{\text{base}} \cdot \mathrm{lerp}\!\left(1.5,\, 1.0,\, \mathrm{smoothstep}(s_y;\, 0.05,\, 0.4)\right)$$
           <div class="equation-caption">σ = fog density, s_y = vertical component of sun direction. Density falls from 1.5× to 1× as the sun climbs above the horizon.</div>
         </div>
-        <p>The fog color is dimmed with the sun's elevation so nighttime fog reads dark rather than the daytime horizon color. A wet-stone mode interpolates the PBR material's roughness input with the wetness scalar w ∈ [0, 1]:</p>
+        <p>Wet stone is implemented by a single uniform that linearly interpolates the PBR material's roughness input from dry to rain-slicked using the wetness scalar w ∈ [0, 1]:</p>
         <div class="equation">
           $$r(w) = (1 - w)\,r_{\text{dry}} + w\,r_{\text{wet}} = 0.85 - 0.60\,w$$
           <div class="equation-caption">r_dry = 0.85 (matte stone), r_wet = 0.25 (rain-slicked, near-specular).</div>
@@ -696,27 +695,36 @@
       <div class="tech-card">
         <div class="tech-card-num">06</div>
         <div class="tech-card-title">Rain &amp; Lightning</div>
-        <p>Rain is rendered as a particle system of short streak billboards, tinted in real time by the scene's live fog color so precipitation integrates atmospherically into any lighting condition. A procedural lightning system fires stochastically during storms, boosting sky exposure, hemisphere light intensity, and rain streak brightness for a single-frame flash. Moonlight is modeled as a dim cool directional light placed opposite the sun, fading in at night and out under cloud cover.</p>
+        <p>Rain is a particle system of short streak billboards, tinted each frame by the live fog color so it integrates with the scene's lighting instead of reading as a flat overlay. Lightning fires stochastically during rainstorms — strike rate scales with rain strength — and on each strike we briefly boost sky exposure, hemisphere fill, and rain-streak brightness for a single-frame flash. Moonlight is a separate cool, dim directional light placed opposite the sun; it fades in at night and out under cloud cover.</p>
       </div>
     </div>
 
     <h3>Implementation Stack</h3>
-    <p>The project uses <strong>Three.js r165</strong> over WebGL 2.0, bundled with <strong>Vite</strong> and deployed via GitHub Pages. The sky pipeline uses custom GLSL shaders authored in <code>.vert.glsl</code> / <code>.frag.glsl</code> files imported as raw strings; the stone material is patched via Three.js's <code>onBeforeCompile</code> hook to inject procedural weathering, masonry, and wet-state interpolation into the standard PBR shader. The UI panel is built with <strong>Tweakpane</strong> — time of day, day of year, weather preset, shadow toggle, and lightning toggle are all live-bound to the render loop.</p>
+    <p>The renderer is built on <strong>Three.js r165</strong> over WebGL 2.0, bundled with <strong>Vite</strong>, and hosted on GitHub Pages. The sky uses custom GLSL shaders loaded as raw strings; the stone uses Three.js's standard PBR material patched via <code>onBeforeCompile</code>, which lets us inject procedural weathering and the wet-state interpolation without forking the whole shader. The UI is <strong>Tweakpane</strong>: time-of-day, day-of-year, weather, and the shadow / lightning toggles are all live-bound to the render loop.</p>
 
     <h3>Performance</h3>
-    <p>The scene maintains 60 fps at 1440p on an Apple M2 MacBook Pro (GPU utilization ~35%). The main cost is the 2048² shadow map update, which occurs every frame to track the sun. A dynamic environment map is re-rendered each frame at low resolution to provide approximate reflections on wet stone without a full ray-traced global illumination pass.</p>
+    <p>The scene holds 60 fps at 1440p on an Apple M2 MacBook Pro at roughly 35% GPU utilization. The biggest per-frame cost is the 2048² shadow map, which is regenerated every frame so it tracks the sun. A PMREM-prefiltered environment map provides approximate reflections on wet stone; we rebuild it at 2 Hz instead of every frame, since the sky changes slowly with time-of-day and a half-second cadence is invisible.</p>
 
     <h3>Challenges</h3>
-    <p><strong>Photogrammetry pivot.</strong> Our original proposal called for reconstructing the tower from reference photographs using Meshroom (AliceVision) Structure-from-Motion. Two practical issues forced a pivot. First, the Campanile's height and four-fold rotational symmetry made it difficult to give SfM the variety of viewing angles it needs to triangulate features cleanly — the upper belfry and pyramid roof are effectively impossible to photograph from above without aerial access, and the four near-identical façades confuse feature-matching. Second, the granite surface is largely uniform and low-contrast, which starved the matcher of distinctive keypoints. The Meshroom output had irregular polygon density on the shaft, holes around the belfry openings, and almost no usable detail on the roof. Cleaning it to a renderable state would have taken longer than rebuilding from scratch, so we pivoted to hand-modeling the tower in Blender as a set of named architectural sub-components (pilasters, belfry shaft, window frames, pyramid roof). The result is cleaner topology, predictable scale, and the ability to address sub-meshes individually for material assignment.</p>
+    <p><strong>Photogrammetry pivot.</strong> Our original proposal was to reconstruct the tower from photos using Meshroom (AliceVision) Structure-from-Motion. Two issues forced us to abandon that approach. First, the Campanile's height and four-fold rotational symmetry are bad for SfM: the upper belfry and pyramid roof are nearly impossible to photograph from a useful angle without aerial access, and the four near-identical façades confuse feature matching. Second, the granite surface is uniform and low-contrast, which gives the matcher very little to lock onto.</p>
 
-    <p><strong>Peter Panning at low sun elevations.</strong> Shadow mapping at sunrise and sunset produced a visible gap between the tower and its own shadow as the directional light approached grazing angles. Increasing depth bias merely traded the artifact for shadow acne. We resolved it with a tuned combination of depth bias, normal bias, and a 25% shadow-intensity reduction under overcast, where physically diffuse cloud light wouldn't cast a hard shadow anyway. The bias parameters have no closed-form solution; arriving at a stable set was an empirical iteration across mesh scale, light angle, and shadow-map resolution.</p>
+    <p>The Meshroom output had irregular polygon density on the shaft, holes around the belfry openings, and almost no usable detail on the roof. Cleaning it to a usable state would have taken longer than starting over, so we pivoted to hand-modeling the tower in Blender as a set of named sub-components (pilasters, belfry shaft, windows, pyramid roof). The result has cleaner topology, predictable scale, and lets us address sub-meshes individually when assigning materials.</p>
 
-    <p><strong>Preetham banding at twilight.</strong> The Preetham analytical sky model produces visible banding near the sun disk at very low elevations (below ~2°). This is a known limitation of the 1999 paper — the chromaticity polynomial is undertuned for grazing-angle airmass. The principled fix is the Hosek-Wilkie (2012) successor, which adds a correction term explicitly for twilight. We accepted the artifact rather than re-implementing a second sky model, and noted the upgrade as future work.</p>
+    <p><strong>Peter Panning at low sun angles.</strong> At sunrise and sunset, the directional light approached grazing angles and produced a visible gap between the tower and its own shadow. Cranking the depth bias up just traded the gap for shadow acne. The fix was a tuned combination of depth bias, normal bias, and a 25% shadow-intensity cut under overcast — where physically diffuse cloud light shouldn't be casting a hard shadow anyway. There's no closed-form solution for these parameters, so finding a stable set was iteration across mesh scale, light angle, and shadow-map resolution.</p>
 
-    <p><strong>Rain reading as an overlay rather than atmosphere.</strong> Our first rain pass rendered streak billboards with a fixed white tint. The result felt pasted on — the precipitation didn't read as part of the same lighting environment as the tower and sky. We fixed this by tinting each streak with the scene's live fog color every frame, so rain inherits the same atmospheric attenuation as everything else. A related problem — nighttime fog reading as daytime grey — was solved by coupling fog brightness to the sun's vertical position, so as the sun drops below the horizon the fog naturally darkens.</p>
+    <p><strong>Preetham banding at twilight.</strong> The Preetham model produces visible banding near the sun disk when the sun gets very low (below ~2°). It's a known limitation of the 1999 paper — its chromaticity polynomial just isn't tuned for the long horizon-grazing path the sun light takes at twilight. The clean fix is the Hosek-Wilkie (2012) successor, which adds a correction term for exactly this case. We accepted the artifact rather than re-implement a second sky model, and noted the upgrade as future work.</p>
+
+    <p><strong>Rain reading as an overlay.</strong> Our first rain pass rendered streak billboards with a fixed white tint, and the result didn't look like part of the scene — it looked pasted on top of it. We fixed this by tinting each streak with the scene's live fog color every frame, so rain inherits the same atmospheric attenuation as everything else. A related issue — nighttime fog reading as daytime grey — was fixed by coupling fog brightness to the sun's vertical position, so the fog naturally darkens as the sun drops below the horizon.</p>
 
     <h3>Deviations from References</h3>
-    <p>Several deliberate choices distinguish our implementation from the cited references. <strong>Solar position</strong> uses a single-sine declination model and ignores the equation of time — a subset of the full NOAA SPA, sufficient for an interactive seasonal slider but not for actuarial precision. <strong>Sky shading</strong> implements Preetham (1999) but not the Hosek-Wilkie (2012) successor, accepting the known twilight banding as a limitation. <strong>Stone material</strong> is patched into Three.js's standard PBR shader via <code>onBeforeCompile</code> rather than authored as a from-scratch BRDF or backed by photographed roughness/normal texture maps — chosen for iteration speed on a stylized look. <strong>Cloud "breathing"</strong> is a CPU-side amplitude modulation by two incommensurate sines (angular frequencies 0.07 and 0.13 rad/s — periods of ~90 s and ~48 s — amplitudes ±0.03 and ±0.04), which is not from any cited reference but proved necessary to eliminate the static feel of a fixed cloud cover value. And as described above, the geometry was hand-modeled in Blender rather than reconstructed via Meshroom photogrammetry as originally proposed.</p>
+    <p>Our implementation differs from the cited references in a few places, all of them deliberate trade-offs:</p>
+    <ul style="list-style:none; padding:0; display:flex; flex-direction:column; gap:0.85rem; margin-bottom:1.2rem;">
+      <li><strong>Solar position.</strong> Single-sine declination instead of the full NOAA SPA, ignoring the equation of time. Accurate enough for a seasonal slider, but not for second-precision astronomy.</li>
+      <li><strong>Sky shading.</strong> Preetham (1999), not the Hosek-Wilkie (2012) successor. We accept the twilight banding as a limitation rather than implement a second sky model.</li>
+      <li><strong>Stone material.</strong> Patched into Three.js's standard PBR shader via <code>onBeforeCompile</code> rather than written as a from-scratch BRDF or backed by photographed roughness/normal texture maps. Faster to iterate on, sufficient for a stylized look.</li>
+      <li><strong>Cloud "breathing."</strong> A two-sine CPU modulation (angular frequencies 0.07 and 0.13 rad/s, amplitudes ±0.03 and ±0.04) — not from any cited reference, but necessary to break the static feel of a fixed cloud-cover value.</li>
+      <li><strong>Geometry.</strong> Hand-modeled in Blender rather than reconstructed via Meshroom photogrammetry as originally proposed (see <em>Photogrammetry pivot</em> above).</li>
+    </ul>
   </section>
 
   <!-- RESULTS -->
@@ -733,7 +741,7 @@
     <div class="showcase-caption">Final showcase clip — an orbit around the tower under a clear midday sky, transitioning into the rain weather preset. For the full interactive experience with time-of-day, day-of-year, and weather controls, <a href="./demo.html">launch the live demo</a>.</div>
 
     <div class="results-intro">
-      <p>The following renders were captured directly from the live browser application by fixing time-of-day, day-of-year, and weather preset in the Tweakpane UI. No post-processing was applied. Each image demonstrates a specific combination of solar position, seasonal geometry, and atmospheric condition that the physical models are designed to reproduce.</p>
+      <p>All images below were captured directly from the live demo by setting time, date, and weather in the UI. No post-processing was applied. Each combination is one the physical models are designed to handle: a specific sun position, seasonal date, and atmospheric condition.</p>
     </div>
 
     <!-- Group 1: Afternoon -->
@@ -743,7 +751,7 @@
         <img src="afternoon_clear.png" alt="Afternoon clear — Day 172, 13:50" loading="lazy" />
       </div>
       <div class="result-caption">
-        Afternoon, clear weather · Day 172 (summer solstice), 13:50 — The Preetham sky shader produces a deep Rayleigh-scattered blue at zenith transitioning to a bright horizon. The solar directional light casts a hard shadow northward from the tower base, consistent with the sun's southern summer position at Berkeley's latitude.
+        Afternoon, clear · Day 172 (summer solstice), 13:50 — Preetham produces the expected deep blue at zenith fading to a bright horizon. The directional sun casts a hard shadow northward from the tower base, consistent with the sun's southern summer position at Berkeley's latitude.
       </div>
     </div>
 
@@ -755,8 +763,8 @@
         <img src="sunrise_no_shadows.png" alt="Clear morning without shadows" loading="lazy" />
       </div>
       <div class="caption-pair">
-        <div class="result-caption">With shadows enabled · The low-angle morning sun casts a long shadow reaching far west, and the shadow-map's normal bias suppresses Peter Panning on the tower's stepped base.</div>
-        <div class="result-caption">Shadows disabled · The same morning lighting without shadow casting, showing the raw sky and tower illumination from the Preetham shader and hemisphere light alone.</div>
+        <div class="result-caption">Shadows on · Low-angle morning sun casts a long shadow reaching far west; the shadow map's normal bias keeps Peter Panning off the stepped base.</div>
+        <div class="result-caption">Shadows off · Same morning lighting with shadow casting disabled, so the raw illumination from the Preetham shader and the hemisphere light is visible on its own.</div>
       </div>
     </div>
 
@@ -782,7 +790,7 @@
       </div>
       <div class="caption-pair">
         <div class="result-caption">Summer (Day 187, ~July 6) · At 20:00 the sun is just setting — a warm orange glow persists above the horizon, with the sun disk visible and ground still partially lit.</div>
-        <div class="result-caption">Spring (Day 100, ~April 10) · At 20:00 the sun has just set and twilight has progressed to near-full dark — the moon and stars dominate. Solar declination shifts the early-April sunset roughly 50 minutes earlier than the early-July one, a difference the date slider captures faithfully.</div>
+        <div class="result-caption">Spring (Day 100, ~April 10) · At 20:00 the sun has just set and twilight has progressed to near-full dark — moon and stars dominate. The April sunset is roughly 50 minutes earlier than the July one, and the date slider reproduces that shift directly from the declination formula.</div>
       </div>
     </div>
 
@@ -793,7 +801,7 @@
         <img src="sunset_clear.png" alt="Summer sunset" loading="lazy" />
       </div>
       <div class="result-caption">
-        Summer sunset · Day 172, 19:57 — the sun has descended below 5° elevation. The horizon-grazing sun path passes through significantly more atmosphere, and Rayleigh and Mie extinction strip the shorter wavelengths preferentially, leaving the warm orange corona of the surviving longer-wavelength light. Moonlight is not yet visible; the scene transitions to night through atmospheric scattering and falloff alone.
+        Summer sunset · Day 172, 19:57 — the sun has descended below 5°, so the horizon-grazing sun path passes through much more atmosphere than at noon. Rayleigh and Mie extinction strip the shorter wavelengths preferentially, leaving the warm orange corona of the longer-wavelength light that survives. Moonlight isn't visible yet; the transition into night happens through atmospheric falloff alone.
       </div>
     </div>
 
@@ -805,8 +813,8 @@
         <img src="rain_sunset.png" alt="Rain at sunset, 18:26" loading="lazy" />
       </div>
       <div class="caption-pair">
-        <div class="result-caption">Rain at night · Day 172, 4:43 AM — the tower is reduced to near-silhouette under total cloud cover. Rain streak billboards are visible against the dark sky; the fog color is modulated by solar elevation to read nearly black, matching the absence of any light source other than faint moonlight.</div>
-        <div class="result-caption">Rain at sunset · Day 172, 18:26 — the same rain preset at dusk. The fog color picks up the warm taupe of the overcast sunset sky, and dense exponential fog dissolves the tower base into the ground plane. Rain streaks are atmospheric-tint matched to the fog, integrating precipitation into the scene rather than overlaying it.</div>
+        <div class="result-caption">Rain at night · Day 172, 4:43 AM — the tower is reduced to near-silhouette under full cloud cover. Rain streaks are visible against the dark sky, and the fog color (modulated by solar elevation) reads nearly black to match the lack of any direct light source besides faint moonlight.</div>
+        <div class="result-caption">Rain at sunset · Day 172, 18:26 — same rain preset at dusk. The fog picks up the warm taupe of the overcast sunset sky, and dense exponential fog dissolves the tower base into the ground plane. Streaks tint with the fog so the rain reads as part of the atmosphere rather than an overlay.</div>
       </div>
     </div>
 
@@ -817,7 +825,7 @@
         <img src="sunset_mid_lightning_flash.png" alt="Lightning flash during rain at sunset" loading="lazy" />
       </div>
       <div class="result-caption">
-        Lightning flash · Rain preset, 18:26 — a single-frame procedural lightning strike boosts sky exposure, hemisphere light intensity, and rain streak brightness simultaneously. The flash briefly overexposes the overcast sky and bleaches the fog, then decays within milliseconds. The effect is driven stochastically: strike probability increases with rain strength, and the magnitude of each exposure boost is randomized to avoid periodicity.
+        Lightning flash · Rain preset, 18:26 — a single-frame procedural strike boosts sky exposure, hemisphere fill, and rain-streak brightness all at once, briefly bleaching the overcast sky and fog before decaying within milliseconds. Strike probability scales with rain strength, and each strike's magnitude is randomized so the storm doesn't feel periodic.
       </div>
     </div>
 
@@ -829,8 +837,8 @@
         <img src="tower_closeup_1.png" alt="Tower clock face close-up" loading="lazy" />
       </div>
       <div class="caption-pair">
-        <div class="result-caption">Top-angle view · Day 172, 15:00 — an overhead orbit camera angle reveals the stepped cornice geometry and the pyramid roof of the modeled mesh. The directional shadow from the roof spire falls correctly onto the belfry parapet, demonstrating that the shadow frustum is tightly fit to the tower bounds at this elevation angle.</div>
-        <div class="result-caption">Clock face close-up · Day 172, 15:00 — a close orbit view shows the procedural stone shading on the upper shaft and the clock face geometry. The PBR MeshStandardMaterial captures diffuse surface variation across the stone panels (sin-noise stone patches, fine grain, and masonry course lines injected via <code>onBeforeCompile</code>); specular highlight falloff at the cornice edges reflects the hemisphere sky light color.</div>
+        <div class="result-caption">Top-angle view · Day 172, 15:00 — a high orbit angle reveals the stepped cornice and pyramid roof. The shadow from the spire lands correctly on the belfry parapet, which only happens when the shadow frustum is tightly fit to the tower bounds at this angle.</div>
+        <div class="result-caption">Clock close-up · Day 172, 15:00 — a close orbit view of the upper shaft shows the procedural stone shading: low-frequency stone patches, fine grain, and horizontal masonry course lines, all injected into Three's PBR shader via <code>onBeforeCompile</code>. The cornice edges pick up the hemisphere sky color in their specular falloff.</div>
       </div>
     </div>
 
@@ -844,23 +852,23 @@
     <ul class="lessons-list">
       <li>
         <span class="lesson-num">1</span>
-        <span class="lesson-text"><strong>Physical models expose their seams at extreme conditions.</strong> The Preetham sky model — sanity-checked against the paper's analytic equations and stable across most of its domain at T = 2.5 — produces visible banding near the sun disk at very low elevations (below 2°). This is a known limitation of the analytical approximation; a full implementation would upgrade to the Hosek-Wilkie (2012) model for twilight. The lesson: validate early and at boundary conditions, not just at the "comfortable" midday case.</span>
+        <span class="lesson-text"><strong>Physical models break down at extreme conditions.</strong> Preetham works cleanly across most of its domain, but produces visible banding near the sun disk at very low elevations (below ~2°) — a known weakness of the 1999 paper that Hosek-Wilkie (2012) was designed to fix. The lesson: validate at boundary conditions, not just at the comfortable midday case.</span>
       </li>
       <li>
         <span class="lesson-num">2</span>
-        <span class="lesson-text"><strong>Shadow map tuning is empirical, not derivable.</strong> Bias parameters for shadow mapping do not have closed-form solutions — they depend on mesh scale, light angle, and map resolution in ways that require iteration. We spent significant time at low sun elevations suppressing Peter Panning without introducing shadow acne, ultimately combining depth bias, normal bias, and a 25% shadow intensity reduction under overcast. The takeaway: budget time for empirical tuning of any numerical parameter in real-time rendering.</span>
+        <span class="lesson-text"><strong>Shadow bias has no closed-form solution.</strong> Depth bias, normal bias, and shadow-map resolution interact in ways that depend on mesh scale and light angle, so finding a stable set is just iteration. We spent real time at low sun angles balancing Peter Panning against shadow acne, eventually settling on the bias combination plus a 25% intensity cut under overcast. Takeaway: budget time for empirical tuning of any numerical parameter in real-time rendering.</span>
       </li>
       <li>
         <span class="lesson-num">3</span>
-        <span class="lesson-text"><strong>Procedural materials beat baked textures for iteration speed.</strong> Rather than authoring and re-baking roughness/diffuse texture maps for the stone, we patched Three.js's standard PBR shader via <code>onBeforeCompile</code> to inject sin-noise stone grain, masonry course bands, and a wet-state interpolation directly in the fragment shader. Tuning weathering and the dry/wet transition became a matter of editing a few constants and reloading — no bake step, no UV re-unwrap, no re-export. The takeaway: for stylized PBR where artistic control matters more than photographic fidelity, procedural shader injection is dramatically more iterable than a texture-map pipeline.</span>
+        <span class="lesson-text"><strong>Procedural beats baked when you're iterating.</strong> Instead of authoring and re-baking texture maps for the stone, we injected sin-noise grain, masonry courses, and the wet-state interpolation into Three.js's PBR shader via <code>onBeforeCompile</code>. Tuning the look meant editing a constant and reloading — no bake step, no UV unwrap, no re-export. For a stylized stone surface where the look mattered more than photo-fidelity, this was dramatically faster than a texture-map pipeline.</span>
       </li>
       <li>
         <span class="lesson-num">4</span>
-        <span class="lesson-text"><strong>Perceptual coherence requires atmospheric coupling across subsystems.</strong> Rain looked disconnected from the scene until we tinted the streak billboards with the live fog color — a small change that made precipitation feel like part of the atmosphere rather than an overlay. Similarly, nighttime fog looked wrong until its brightness was modulated by solar elevation. Physically correct individual systems do not automatically compose into a perceptually correct whole; the coupling between systems matters as much as their individual accuracy.</span>
+        <span class="lesson-text"><strong>Subsystems have to talk to each other.</strong> Each subsystem (sky, fog, rain, shadows) was physically reasonable in isolation, but rain still felt pasted onto the scene until we tinted the streaks with the live fog color, and nighttime fog read as daytime grey until its brightness was tied to the sun's elevation. Lesson: physical correctness in each system doesn't automatically compose into a believable whole — the couplings between them matter just as much as their individual accuracy.</span>
       </li>
       <li>
         <span class="lesson-num">5</span>
-        <span class="lesson-text"><strong>Browser-based deployment is both a strength and a constraint.</strong> Running entirely in the browser with no installation removed every barrier to sharing and demonstrating the project. However, the WebGL API's lack of compute shaders (in WebGL 2.0) and the browser's memory pressure model constrained our particle count and texture resolution. A native OpenGL or Vulkan backend would have allowed volumetric ray marching for clouds and higher-resolution shadow maps, both of which remain on the stretch-goal list.</span>
+        <span class="lesson-text"><strong>Browser deployment is great for distribution, painful for headroom.</strong> Shipping in the browser meant anyone could open the live demo with a URL — no install, no setup. But WebGL 2.0 has no compute shaders, and the browser's memory pressure put a ceiling on our particle counts and shadow-map resolution. A native OpenGL or Vulkan target would have allowed volumetric clouds and bigger shadow maps; both are on the future-work list.</span>
       </li>
     </ul>
   </section>
@@ -910,7 +918,7 @@
           <li>Sanity-checked the Preetham implementation against the paper's analytic equations during development</li>
           <li>Designed and tuned all three weather presets</li>
           <li>Implemented exponential fog with time-of-day density variation</li>
-          <li>Authored the milestone and final report writeup</li>
+          <li>Authored the milestone report writeup</li>
         </ul>
       </div>
       <div class="team-card">
@@ -921,7 +929,6 @@
           <li>Authored the procedural stone weathering shader (grain, masonry courses, runoff streaks) via <code>onBeforeCompile</code></li>
           <li>Implemented dry/wet PBR material switching (roughness and diffuse interpolation between dry and wet states)</li>
           <li>Configured and tuned PCF shadow mapping parameters</li>
-          <li>Set up GitHub Pages deployment and Vite build pipeline</li>
         </ul>
       </div>
       <div class="team-card">
@@ -943,6 +950,8 @@
           <li>Built atmospheric tinting of rain streaks from live fog color</li>
           <li>Implemented the procedural lightning system with frame-level exposure boosts</li>
           <li>Performance profiling and GPU utilization optimization</li>
+          <li>Set up the Vite build pipeline and GitHub Pages deployment</li>
+          <li>Authored the final report writeup</li>
         </ul>
       </div>
     </div>
