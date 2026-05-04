@@ -670,12 +670,49 @@
 
     <!-- Group 5: Sunset -->
     <div class="result-group">
-      <div class="result-group-label">Sunset</div>
+      <div class="result-group-label">Sunset — Clear</div>
       <div class="result-single">
         <img src="sunset_clear.png" alt="Summer sunset" loading="lazy" />
       </div>
       <div class="result-caption">
         Summer sunset · Day 172, 19:57 — the sun has descended below 5° elevation, triggering the Mie scattering regime in the sky shader. The large-particle glow produces the characteristic warm orange corona. Moonlight is not yet visible; the scene transitions to night through pure atmospheric scattering.
+      </div>
+    </div>
+
+    <!-- Group 6: Rain — night vs sunset -->
+    <div class="result-group">
+      <div class="result-group-label">Rain — Time of Day Comparison</div>
+      <div class="result-pair">
+        <img src="rain_night.png" alt="Rain at night, 4:43 AM" loading="lazy" />
+        <img src="rain_sunset.png" alt="Rain at sunset, 18:26" loading="lazy" />
+      </div>
+      <div class="caption-pair">
+        <div class="result-caption">Rain at night · Day 172, 4:43 AM — the tower is reduced to near-silhouette under total cloud cover. Rain streak billboards are visible against the dark sky; the fog color is modulated by solar elevation to read nearly black, matching the absence of any light source other than faint moonlight.</div>
+        <div class="result-caption">Rain at sunset · Day 172, 18:26 — the same rain preset at dusk. The fog color picks up the warm taupe of the overcast sunset sky, and dense exponential fog dissolves the tower base into the ground plane. Rain streaks are atmospheric-tint matched to the fog, integrating precipitation into the scene rather than overlaying it.</div>
+      </div>
+    </div>
+
+    <!-- Group 7: Lightning flash -->
+    <div class="result-group">
+      <div class="result-group-label">Lightning Flash</div>
+      <div class="result-single">
+        <img src="sunset_mid_lightning_flash.png" alt="Lightning flash during rain at sunset" loading="lazy" />
+      </div>
+      <div class="result-caption">
+        Lightning flash · Rain preset, 18:26 — a single-frame procedural lightning strike boosts sky exposure, hemisphere light intensity, and rain streak brightness simultaneously. The flash briefly overexposes the overcast sky and bleaches the fog, then decays within milliseconds. The effect is driven stochastically: strike probability increases with rain strength, and the magnitude of each exposure boost is randomized to avoid periodicity.
+      </div>
+    </div>
+
+    <!-- Group 8: Geometry close-ups -->
+    <div class="result-group">
+      <div class="result-group-label">Geometry &amp; Mesh Detail</div>
+      <div class="result-pair">
+        <img src="tower_top_angle.png" alt="Tower from above — top angle view" loading="lazy" />
+        <img src="tower_closeup_1.png" alt="Tower clock face close-up" loading="lazy" />
+      </div>
+      <div class="caption-pair">
+        <div class="result-caption">Top-angle view · Day 172, 15:00 — an overhead orbit camera angle reveals the stepped cornice geometry and the pyramid roof reconstructed from photogrammetry. The directional shadow from the roof spire falls correctly onto the belfry parapet, demonstrating that the shadow frustum is tightly fit to the tower bounds at this elevation angle.</div>
+        <div class="result-caption">Clock face close-up · Day 172, 15:00 — a close orbit view shows the UV-mapped stone texture on the upper shaft and the clock face geometry. The PBR MeshStandardMaterial captures diffuse surface variation across the stone panels; specular highlight falloff at the cornice edges reflects the hemisphere sky light color.</div>
       </div>
     </div>
 
