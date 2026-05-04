@@ -6,22 +6,22 @@ import * as THREE from 'three';
 export const WEATHER_PRESETS = {
   clear: {
     turbidity: 2.5,  rayleigh: 1.0,  mieCoefficient: 0.005,
-    exposure: 1.0,   cloudCover: 0.0,
+    exposure: 1.0,   cloudCover: 0.0, wetness: 0.0, rainStrength: 0.0,
     fogColor: 0xb8c8d8, fogDensity: 0.0005,
   },
   overcast: {
     turbidity: 6.0,  rayleigh: 0.6,  mieCoefficient: 0.012,
-    exposure: 0.85,  cloudCover: 0.85,
-    fogColor: 0x9aa4ad, fogDensity: 0.004,
+    exposure: 0.85,  cloudCover: 0.85, wetness: 0.4, rainStrength: 0.12,
+    fogColor: 0x9aa4ad, fogDensity: 0.002,
   },
   rain: {
     turbidity: 8.0,  rayleigh: 0.5,  mieCoefficient: 0.020,
-    exposure: 0.6,   cloudCover: 1.0,
+    exposure: 0.6,   cloudCover: 1.0, wetness: 1.0, rainStrength: 1.0,
     fogColor: 0x6c747c, fogDensity: 0.008,
   },
 };
 
-const SCALAR_KEYS = ['turbidity', 'rayleigh', 'mieCoefficient', 'exposure', 'cloudCover', 'fogDensity'];
+const SCALAR_KEYS = ['turbidity', 'rayleigh', 'mieCoefficient', 'exposure', 'cloudCover', 'fogDensity', 'wetness', 'rainStrength'];
 const TIME_CONSTANT = 1.5; // seconds; ~1.5s feels smooth without dragging
 const CLEAR = WEATHER_PRESETS.clear;
 
@@ -35,6 +35,8 @@ export const current = {
   cloudCover: CLEAR.cloudCover,
   fogColor: new THREE.Color(CLEAR.fogColor),
   fogDensity: CLEAR.fogDensity,
+  wetness: CLEAR.wetness,
+  rainStrength: CLEAR.rainStrength,
 };
 
 // Allocated once; reused every frame to avoid per-frame Color churn.

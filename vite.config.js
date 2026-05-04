@@ -7,7 +7,8 @@ export default defineConfig({
     open: true,
   },
   build: {
-    target: 'es2020',
+    // esnext: enables top-level await (used in main.js for the glTF load).
+    target: 'esnext',
     outDir: 'dist',
   },
 });

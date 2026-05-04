@@ -14,6 +14,7 @@ uniform float mieCoefficient;
 uniform float mieDirectionalG;
 uniform float exposure;
 uniform float cloudCover;
+uniform float time;
 
 varying vec3 vViewDir;
 
@@ -148,6 +149,94 @@ void main() {
     float halo = pow(max(0.0, cosViewSun), 4.0) * 0.3 * lit;
     vec3 cloudColor = (vec3(cloudBright) * cloudLight + vec3(halo)) * exposure;
     color = mix(color, cloudColor, cloudCover);
+  }
+
+  // ---- night sky: stars + moon ----
+  // Faded out by daylight (sunDirection.y rising past horizon) and by cloud
+  // cover. We do this after the cloud layer mix so a clearing in the clouds
+  // doesn't reveal stars through the layer — only fully-clear sky gets them.
+  float nightFactor = (1.0 - smoothstep(-0.05, 0.10, sunDirection.y)) * (1.0 - cloudCover);
+
+  if (nightFactor > 0.001) {
+    // Procedural stars in equal-area spherical (u, v) coords. Quantizing on
+    // raw xyz would bunch stars at the zenith (3D cells map to smaller solid
+    // angles near the poles); the (theta, cos(phi)) mapping below has the same
+    // solid angle per cell everywhere on the sphere, so density is uniform.
+    vec3 vn = normalize(view);
+    float phi = acos(clamp(vn.y, -1.0, 1.0));     // 0 at zenith, π at nadir
+    float theta = atan(vn.z, vn.x);                // -π..π
+    float u = (theta + 3.14159265) / 6.28318530;   // 0..1
+    float vv = (1.0 - cos(phi)) * 0.5;             // 0..1, equal area
+
+    // Stars come in a temperature range — hot O/B types blue-white, cool K/M
+    // types orange/red. A second hash per cell drives a tint between those.
+    // Bias toward white via mix() so the sky isn't a Christmas tree.
+    vec3 warm = vec3(1.0, 0.78, 0.55);
+    vec3 cool = vec3(0.65, 0.82, 1.0);
+
+    // Layer 1: dense field of dim stars (~640 visible at threshold 0.992).
+    vec2 uv1 = vec2(u, vv) * vec2(420.0, 210.0);
+    vec2 cell1 = floor(uv1);
+    float h1 = fract(sin(dot(cell1, vec2(12.9898, 78.233))) * 43758.5453);
+    float c1 = fract(sin(dot(cell1, vec2(31.31, 67.71))) * 12345.6789);
+    vec3 col1 = mix(mix(warm, cool, c1), vec3(1.0), 0.55);
+    float star1 = 0.0;
+    if (h1 > 0.992) {
+      vec2 f = fract(uv1) - 0.5;
+      float d = length(f);
+      float tw = 0.7 + 0.3 * sin(time * 2.5 + h1 * 60.0);
+      star1 = smoothstep(0.18, 0.0, d) * (h1 - 0.992) * 80.0 * tw;
+    }
+
+    // Layer 2: sparser field of bright "named" stars. Size scales with
+    // brightness and the brightest get a soft halo — that's the cue your
+    // eye uses to pick out e.g. Sirius vs the surrounding field.
+    vec2 uv2 = vec2(u, vv) * vec2(170.0, 85.0);
+    vec2 cell2 = floor(uv2);
+    float h2 = fract(sin(dot(cell2, vec2(45.123, 12.456))) * 12345.6789);
+    float c2 = fract(sin(dot(cell2, vec2(89.71, 23.41))) * 67890.123);
+    vec3 col2 = mix(mix(warm, cool, c2), vec3(1.0), 0.4);
+    float star2 = 0.0;
+    float halo2 = 0.0;
+    if (h2 > 0.996) {
+      vec2 f = fract(uv2) - 0.5;
+      float d = length(f);
+      float tw = 0.6 + 0.4 * sin(time * 1.7 + h2 * 100.0);
+      float bright = (h2 - 0.996) * 220.0;
+      float r = 0.18 + bright * 0.04;       // bigger when brighter
+      star2 = smoothstep(r, 0.0, d) * bright * tw;
+      halo2 = smoothstep(0.5, 0.0, d) * bright * tw * 0.12;
+    }
+
+    color += col1 * star1 * nightFactor * 0.7;
+    color += col2 * (star2 + halo2) * nightFactor * 0.7;
+
+    // Faint Milky Way: a broad gaussian glow along a tilted great circle.
+    // The axis is perpendicular to the band; brightness peaks where view is
+    // tangent to that plane. Low-frequency sin variation along the band
+    // mimics the brighter / dimmer patches caused by interstellar dust.
+    vec3 mwAxis = normalize(vec3(0.42, 0.55, 0.72));
+    float across = dot(vn, mwAxis);
+    // Project view onto the band plane, measure angle around it for the
+    // along-band coordinate (used only for noise variation, not geometry).
+    vec3 onBand = normalize(vn - mwAxis * across);
+    vec3 ref = normalize(cross(mwAxis, vec3(0.0, 1.0, 0.0)));
+    float along = atan(dot(onBand, cross(mwAxis, ref)), dot(onBand, ref));
+    float band = smoothstep(0.42, 0.0, abs(across));
+    float bandNoise = 0.45 + 0.35 * sin(along * 3.1) + 0.25 * sin(along * 9.7 + 1.7);
+    band *= max(0.0, bandNoise);
+    color += vec3(0.55, 0.62, 0.85) * band * band * nightFactor * 0.10;
+
+    // Moon: opposite the sun, lifted above the horizon. Real moon orbit
+    // doesn't strictly oppose the sun, but for the visual we want it visible
+    // whenever the sun is down — not every night, but most of them.
+    vec3 moonDir = normalize(vec3(-sunDirection.x, max(0.15, -sunDirection.y), -sunDirection.z));
+    float cosViewMoon = dot(view, moonDir);
+    // Moon disc (~0.5° angular radius) + soft halo. Halo fakes the bright
+    // surround you see in real night photos without needing a separate pass.
+    float moonDisc = smoothstep(0.99985, 0.99998, cosViewMoon);
+    float moonHalo = pow(max(0.0, cosViewMoon), 800.0) * 0.25;
+    color += vec3(0.85, 0.88, 0.95) * (moonDisc * 0.5 + moonHalo) * nightFactor;
   }
 
   gl_FragColor = vec4(color, 1.0);

@@ -3,12 +3,16 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { initUI, params } from './ui.js';
 import { getSunDirection } from './solar.js';
 import { WEATHER_PRESETS, current as weatherCurrent, updateWeather } from './weather.js';
+import { loadCampanile, setWetness } from './stone.js';
+import { initEnvMap, updateEnvMap } from './envmap.js';
+import { initRain, updateRain, setRainStrength, setRainTint, setRainFlash, getRainMesh } from './rain.js';
+import { updateLightning, setLightningRainStrength, setLightningEnabled } from './lightning.js';
 import skyVert from './shaders/sky.vert.glsl?raw';
 import skyFrag from './shaders/sky.frag.glsl?raw';
 
-// Tower placeholder dimensions. The real Campanile is ~93.6m; we round to 94m.
+// The real Campanile is ~93.6m; we round to 94m. Camera target sits at the
+// tower midpoint so orbit controls stay framed on it.
 const TOWER_HEIGHT = 94;
-const TOWER_DIAMETER = 10;
 const TOWER_MIDPOINT = new THREE.Vector3(0, TOWER_HEIGHT / 2, 0);
 const SUN_DISTANCE = 200;
 
@@ -20,9 +24,9 @@ const scene = new THREE.Scene();
 const camera = createCamera();
 const controls = createControls(camera, renderer.domElement);
 
-const { hemi, directionalLight } = addLighting(scene);
+const { hemi, directionalLight, moonLight } = addLighting(scene);
 addGround(scene);
-const tower = addTowerPlaceholder(scene);
+const tower = await loadCampanile(scene);
 const sky = createSky(scene);
 
 // Initialized to the `clear` preset; updateWeather() mutates color/density.
@@ -30,6 +34,8 @@ scene.fog = new THREE.FogExp2(WEATHER_PRESETS.clear.fogColor, WEATHER_PRESETS.cl
 
 const clock = new THREE.Clock();
 
+initEnvMap(renderer);
+initRain(scene);
 initUI();
 
 window.addEventListener('resize', onResize);
@@ -88,27 +94,24 @@ function addLighting(targetScene) {
   targetScene.add(dir);
   targetScene.add(dir.target);
 
-  return { hemi: hemiLight, directionalLight: dir };
+  // Moon: cool dim directional light, intensity driven per frame. No shadow —
+  // real moonlight shadows are too soft to register on wet-stone roughness.
+  const moon = new THREE.DirectionalLight(0xb8c8e8, 0);
+  moon.target.position.set(0, 0, 0);
+  targetScene.add(moon);
+  targetScene.add(moon.target);
+
+  return { hemi: hemiLight, directionalLight: dir, moonLight: moon };
 }
 
 function addGround(targetScene) {
-  const geo = new THREE.PlaneGeometry(200, 200);
-  // Memorial Glade is grass; a muted green reads better than neutral grey
-  // against the Preetham sky and gives the cylinder something to cast onto.
+  // Big enough to reach well past where FogExp2 fades to opaque (at clear-day
+  // density 0.0005, ~63% fogged at 4000m). Without this the tower reads as
+  // sitting on a floating green slab over a sky-colored void.
+  const geo = new THREE.PlaneGeometry(8000, 8000);
   const mat = new THREE.MeshStandardMaterial({ color: 0x3e5a2c, roughness: 1.0, metalness: 0.0 });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.receiveShadow = true;
-  targetScene.add(mesh);
-  return mesh;
-}
-
-function addTowerPlaceholder(targetScene) {
-  const geo = new THREE.CylinderGeometry(TOWER_DIAMETER / 2, TOWER_DIAMETER / 2, TOWER_HEIGHT, 32);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.7, metalness: 0.0 });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.y = TOWER_HEIGHT / 2; // base flush with ground
-  mesh.castShadow = true;
   mesh.receiveShadow = true;
   targetScene.add(mesh);
   return mesh;
@@ -129,6 +132,7 @@ function createSky(targetScene) {
       mieDirectionalG: { value: 0.8 },
       exposure: { value: 1.0 },
       cloudCover: { value: 0.0 },
+      time: { value: 0 },
     },
   });
   const mesh = new THREE.Mesh(geo, material);
@@ -147,6 +151,7 @@ function onResize() {
 }
 
 const _sunDir = new THREE.Vector3();
+const _moonDir = new THREE.Vector3();
 const _directColor = new THREE.Color();
 const _hemiSky = new THREE.Color();
 const _coolWhite = new THREE.Color(0.85, 0.88, 0.95);
@@ -160,11 +165,21 @@ function render() {
 
   directionalLight.castShadow = params.showShadows;
   sky.material.uniforms.sunDirection.value.copy(_sunDir);
+  sky.material.uniforms.time.value = clock.elapsedTime;
 
   // Light orbits with the sun; the shadow camera looks from light → target,
   // so the frustum naturally rotates to follow. Intensity / color of both
   // lights is set in pushWeatherToScene() (cloud-cover modulated).
   directionalLight.position.copy(_sunDir).multiplyScalar(SUN_DISTANCE);
+
+  updateEnvMap(scene, clock.elapsedTime, [tower, getRainMesh()]);
+  updateRain(clock.elapsedTime, camera);
+
+  // Lightning runs after weather sync so its boosts add on top of steady-state.
+  const flash = updateLightning(clock.elapsedTime);
+  sky.material.uniforms.exposure.value = weatherCurrent.exposure + flash * 0.6;
+  hemi.intensity += flash * 1.4;
+  setRainFlash(flash * 0.7);
 
   controls.update();
   renderer.render(scene, camera);
@@ -191,10 +206,27 @@ function pushWeatherToScene() {
   scene.fog.color.copy(weatherCurrent.fogColor).multiplyScalar(THREE.MathUtils.lerp(0.05, 1.0, lit));
   scene.fog.density = weatherCurrent.fogDensity * fogTimeMul;
 
-  // Direct sun dims+cools under cloud; hemi sky color shifts from blue to
-  // fog grey, intensity boosts slightly to fill the now-soft shadows.
+  // Direct sun dims+cools under cloud; hemi shifts from sky-blue to fog-grey
+  // and brightens to fill the now-soft shadows; shadow opacity softens 25%
+  // under full overcast (diffuse cloud light doesn't cast hard shadows).
+  // Night hemi floor of 0.07 keeps a faint moonlit silhouette.
   directionalLight.intensity = Math.max(0, _sunDir.y) * THREE.MathUtils.lerp(1.0, 0.15, cc);
   directionalLight.color.copy(_directColor.setRGB(1, 1, 1).lerp(_coolWhite, cc));
+  directionalLight.shadow.intensity = THREE.MathUtils.lerp(1.0, 0.75, cc);
   hemi.color.copy(_hemiSky.set(0x87ceeb).lerp(weatherCurrent.fogColor, cc));
-  hemi.intensity = THREE.MathUtils.lerp(0.25, 0.6, THREE.MathUtils.smoothstep(_sunDir.y, -0.1, 0.2)) * THREE.MathUtils.lerp(1.0, 1.4, cc);
+  hemi.intensity = THREE.MathUtils.lerp(0.07, 0.6, THREE.MathUtils.smoothstep(_sunDir.y, -0.1, 0.2)) * THREE.MathUtils.lerp(1.0, 1.4, cc);
+
+  // Moon: opposite the sun in xz, lifted above the horizon. Fades in at night
+  // and out under cloud — same visibility envelope as the moon in the sky shader.
+  _moonDir.set(-_sunDir.x, Math.max(0.18, -_sunDir.y), -_sunDir.z).normalize();
+  moonLight.position.copy(_moonDir).multiplyScalar(SUN_DISTANCE);
+  moonLight.intensity = THREE.MathUtils.smoothstep(-_sunDir.y, -0.05, 0.12) * (1 - cc) * 0.18;
+
+  setWetness(weatherCurrent.wetness);
+
+  // Tint streaks with the live (already sun-dimmed) fog color so rain reads
+  // as part of the atmosphere — and so it darkens at night automatically.
+  setRainStrength(weatherCurrent.rainStrength);
+  setRainTint(scene.fog.color);
+  setLightningRainStrength(weatherCurrent.rainStrength, clock.elapsedTime);
 }

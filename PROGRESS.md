@@ -11,14 +11,15 @@ at the top whenever a phase is finished or scope changes.
 
 ## Status
 
-- **Current phase**: Day 3 complete, visually verified, and approved. Ready to start Day 4.
-- **Last action**: Day 3 realism pass landed and signed off — sun-extinction-driven cloud tint, weather-modulated lights (direct sun dims+cools under cloud, hemi color shifts from clear-sky blue to fog grey), dawn/dusk fog density bump, subtle two-frequency cloud breathing. `main.js` at exactly 200 lines.
-- **Next phase**: Day 4 — wet-stone PBR shader + glTF Campanile model load. Plan below is the spec.
-- **Blocked on**: Possibly the `assets/campanile.glb` asset itself. If it's not ready at session start, swap in a Sketchfab/Poly Haven placeholder model so the wet/dry pipeline stays end-to-end testable, and proceed. Do not wait on the asset.
-- **Pre-Day-4 reminders**:
-  - The Day 3 weather state (`current` from `src/weather.js`) is the canonical source for `wetness` — Day 4 adds `wetness` to each preset and to `SCALAR_KEYS`, and that's the entire wiring change to drive material wetness from weather.
-  - `clear` preset values are pinned to Day 2 sky defaults — do **not** retune them in Day 4.
-  - `main.js` is at the 200-line cap. If Day 4's loader + material patcher pushes it over, factor `loadCampanile` and the `onBeforeCompile` hook into a new `src/stone.js`.
+- **Current phase**: Day 4 complete + side quests, visually verified. Ready to start Day 6.
+- **Last action**: Day 4 landed (real Campanile glTF, wet-stone shader, PMREM env map) plus four side quests during sign-off: limestone tint, procedural low-freq stone noise, solar.js DST/longitude correction, and a night hemi floor so the tower silhouettes against a dark sky instead of glowing dusk-blue. A clock-face dial attempt was tried and reverted — the GLB plates have no UVs, and the eventual fix wasn't worth the scope creep.
+- **Next phase**: Day 6 — rain particles + polish + add-ons. Plan below.
+- **Day 5 is SKIPPED.** Tone.js bell chimes are off the table; we will not add audio. Roadmap and deliverables jump straight from Day 4 to Day 6.
+- **Pre-Day-6 reminders**:
+  - Weather state is still the canonical driver. Rain particle density / lightning probability key off `weatherCurrent.cloudCover` and/or `weatherCurrent.wetness`, the same way wet stone does.
+  - `main.js` is currently at ~200 lines. New systems (rain, lightning, stars) live in their own modules under `src/` — no fat `main.js`.
+  - `setWetness()` is already on a per-frame path; `pushWeatherToScene()` is the right place to feed any new weather-derived parameters.
+  - PMREM env map rebakes at 2 Hz and hides the tower while baking — if a new system adds visible-from-the-sky geometry (rain streaks, lightning flash mesh), consider whether it should also be hidden during the bake.
 
 ---
 
@@ -327,154 +328,225 @@ shader). `main.js` is at 200 lines exactly.
 
 ---
 
-## Day 4 — PLAN (do not implement until user gives go-ahead)
+## Day 4 — DONE
 
-Goal: replace the cylinder placeholder with the real Campanile geometry and
-give it a wet-stone PBR look that responds to the weather state. Wetness is
-just another lerp following the same curve as Day 3's scalars.
+Real Campanile geometry on a wet-stone PBR shader, with the wetness scalar
+following the same Day 3 lerp curve as every other weather parameter. The
+GLB shipped with a number of authoring quirks that took most of the day to
+work around; the final pipeline is documented below for the next time we
+touch it.
 
-### Asset reality check (read first)
+### What landed
 
-`assets/campanile.glb` may not exist at the start of Day 4. If it doesn't,
-swap in a Sketchfab / Poly Haven placeholder model temporarily — anything
-roughly tower-shaped will do, as long as it loads via `GLTFLoader`. The
-shader work is independent of the exact mesh; we just need *something* to
-shade. Do not block on the real model; mark a TODO and proceed with the
-placeholder so the wet/dry path is end-to-end testable.
+- **`src/weather.js`** — added `wetness` to all three presets
+  (`clear: 0.0`, `overcast: 0.4`, `rain: 1.0`), to `SCALAR_KEYS`, and to
+  the `current` state object. Zero new code paths — the existing
+  `updateWeather` lerp picked it up.
+- **`src/stone.js`** (new) — `loadCampanile(scene)` GLTFLoader wrapper
+  with cylinder fallback, plus the `onBeforeCompile` wet-stone patch.
+  - **GLB filtering rules**: `Ground`, `Plaza`, `Path_*`, `Wall_*`,
+    `Bollard*`, `Pilaster_M_*` are hidden (they're props/glitches that
+    don't belong on Memorial Glade). Blender's auto-suffixed duplicates
+    (`*.001` etc.) are also hidden.
+  - **`fixLowerWindows`**: lower-shaft window strips have a duplicate-pair
+    authoring bug — one floats past the wall, one is buried inside it.
+    The patch snaps the outer copy onto the wall surface
+    (`LOWER_WALL_R = 1.32` in GLB units) and hides the inner duplicate.
+    The belfry colonnade (`Col_*` / `ColBase_*` / `ColCap_*`) sits past
+    `BelfryShaft` too but that's *intentional* — freestanding columns —
+    so it's left alone.
+  - **`normalizeToTower`**: two-pass bbox normalization. Scale uses the
+    *full* bbox (so the tower height stays at 94 m regardless of which
+    props are filtered); centering and grounding use only *visible*
+    meshes (so the lowest tower step sits on grass, not on the height
+    of the hidden plaza underneath).
+- **`src/envmap.js`** (new) — `PMREMGenerator`-based scene-environment
+  bake at 2 Hz. Hides the tower mesh during the bake so wet stone
+  doesn't reflect itself. Without this, wet stone reads as dark plastic
+  because `MeshStandardMaterial`'s specular term samples a black
+  environment by default.
+- **`src/main.js`** — top-level `await loadCampanile(scene)`,
+  `initEnvMap(renderer)` after fog setup, `updateEnvMap(scene, t, tower)`
+  in `render()`, and `setWetness(weatherCurrent.wetness)` /
+  `directionalLight.shadow.intensity = lerp(1.0, 0.75, cc)` added to
+  `pushWeatherToScene()`. Vite `build.target` bumped to `'esnext'` for
+  top-level await support.
 
-When the real model arrives, drop it in at `assets/campanile.glb`, adjust
-the scale + position to match the cylinder it's replacing (TOWER_HEIGHT =
-94 m, base on ground, centered on origin), and remove the placeholder.
+### Wet-stone shader patch (in `stone.js`)
 
-### Wetness as a weather-derived parameter
+The `patchWetness(material)` `onBeforeCompile` injection does **three**
+things in fixed order on every `MeshStandardMaterial`:
 
-Add a `wetness` field to each preset and to `current`:
+1. **Limestone tint** — `diffuseColor.rgb *= vec3(1.05, 1.0, 0.85)`. The
+   real Campanile is warm Indiana limestone, not neutral grey. Shifts
+   the whole tower cream/tan without retouching any GLB material.
+2. **Low-frequency stone noise** — three incommensurate sines on world
+   position (`vStoneWPos`, passed through a custom varying because
+   `MeshStandardMaterial` doesn't expose `vWorldPosition` outside the
+   env-map path). Frequencies `(0.5, 0.27, 0.43)`. Modulates diffuse
+   `mix(0.92, 1.08, n)` and roughness `+= (n - 0.5) * 0.15`. Multi-meter
+   patches break up the flat painted look without committing to a real
+   texture asset.
+3. **Wetness** — diffuse `*= mix(1.0, 0.78, wetness)` (uniform darken)
+   and roughness `= mix(0.85, 0.25, wetness)` (uniform smoothing). Comes
+   *after* the tint+noise so wet stone keeps its warm undertone and
+   weathered patches.
 
-```js
-clear:    { ..., wetness: 0.0 }
-overcast: { ..., wetness: 0.4 }   // damp but not glistening
-rain:     { ..., wetness: 1.0 }
-```
+Per-material `wetness` uniform lives on `material.userData.wetness =
+{ value: 0 }` and is wired to the compiled shader via `shader.uniforms`.
+A module-scope `wetUniforms[]` array lets `setWetness()` push the same
+value to every patched material in one tight loop.
 
-`updateWeather` already iterates `SCALAR_KEYS` — adding `'wetness'` to that
-array is the entire wiring change. No new shape, no new lerp.
+### Side quests during sign-off
 
-### Wet-stone shader approach
+These were not in the original Day 4 spec; they came up during visual
+review and were addressed in-phase rather than punted:
 
-Two reasonable paths. Pick one:
+- **Limestone tint and stone noise** (above) — both originally listed as
+  optional Day 7 polish. Cheap enough to land now and they ground the
+  visual.
+- **`solar.js` DST + longitude correction.** The original code treated
+  `timeOfDay` as solar time, so 17:29 on May 3 read as ~18° altitude
+  (sunset-like). Berkeley sits 9 min west of the Pacific time-zone
+  meridian and observes PDT March–November, so 17:29 *clock* time is
+  actually solar time ≈ 16:09 → ~31° altitude. Now `getSunDirection`
+  treats input as Berkeley local clock time, applies a day-of-year DST
+  window (days 70–308) and the longitude offset
+  (`LON_OFFSET_HR = -0.151`), and the dev `console.assert` lines were
+  updated to use clock-time inputs (e.g. summer solstice solar noon =
+  13:09 PDT, not 12:00). Equation of time (±15 min) still ignored.
+- **Night hemi floor.** The Day 2 hemi floor of `0.25` kept the tower
+  visible at midnight but glowing dusk-blue. Lowered the night floor to
+  `0.07` (`mix(0.07, 0.6, smoothstep(_sunDir.y, -0.1, 0.2))`) so the
+  tower silhouettes against a dark sky rather than disappearing into
+  pitch black or floating in dusk light.
+- **Clock-face dial — attempted, reverted.** The four `ClockFace_*`
+  plates in the GLB use the dark `GraniteDark` material and ship with
+  no `TEXCOORD_0`, only `POSITION` + `NORMAL`. A first attempt at a
+  procedural canvas-texture dial (Roman numerals + live hour/minute
+  hands keyed to `params.timeOfDay`) failed because there are no UVs
+  to sample against. Generating planar UVs from each plate's bbox would
+  work but introduces orientation-flip handling per cardinal face plus
+  emissive-glow tuning so the recessed dial reads behind the bronze
+  ring — too much surface area for what was supposed to be a polish
+  beat. Removed entirely; clock plates now go through the standard
+  `patchWetness` path and read as part of the wall behind the bronze
+  ring.
 
-**A. `MeshStandardMaterial.onBeforeCompile` injection (preferred for MVP).**
-Hook the material the loader returns and inject GLSL fragments that:
-- Lower roughness and raise specular reflectance as `wetness` rises
-  (wet stone roughness ≈ 0.25, dry ≈ 0.85). Specifically `roughness = mix(0.85, 0.25, wetness)`.
-- Slightly darken the diffuse albedo (wet things look ~15–25% darker).
-- Optionally add a subtle vertical-gradient mask so puddling reads at the
-  base / horizontal upward-facing surfaces (`max(0, normal.y)` weighting).
-- Pass `wetness` in via a `uniforms.wetness = { value: 0.0 }` patched onto
-  the material; update each frame from `weatherCurrent.wetness`.
+### Verification (signed off)
 
-This keeps lighting/shadowing/IBL/tonemapping integration free, which is
-the whole reason `MeshStandardMaterial` exists.
+- Real Campanile geometry visible, ~94 m tall, sitting on grass with the
+  filtered-out plaza/paths/walls/etc. correctly hidden.
+- Wet/dry transition smooth across the same 1.5 s curve as the rest of
+  the weather state.
+- Limestone tint reads warm cream/tan in clear noon; stone noise is
+  visible as gentle multi-meter patches on close inspection.
+- Sun position at 17:29 on day 123 reads as afternoon, not sunset.
+- Night sky and tower both go dark — tower stays a faint silhouette,
+  not pitch black.
+- No shader compile errors, no `THREE.WebGLProgram` warnings, no
+  console asserts firing.
 
-**B. Custom `ShaderMaterial`.** Only justified if (A) gets too tangled —
-e.g., we end up needing custom BRDF behavior the standard material can't
-express. Drop this option unless it becomes obviously cleaner; carrying our
-own BRDF is a lot of surface area for a one-week project.
+### NOT done in Day 4 (intentional)
 
-Default to A. Use B only with explicit justification.
-
-### Interaction with Day 3 (read before tuning)
-
-The Day 3 realism pass changed the lighting model in ways that affect what
-wet stone will *actually* look like under each weather state:
-
-- `directionalLight.intensity` is now multiplied by `mix(1.0, 0.15, cloudCover)`.
-  So under rain, the direct sun is at 15% strength. Wet stone's sharp
-  specular highlights from the direct sun will be *dimmer* than naively
-  expected — the most dramatic "wet rim highlights" will appear at
-  **clear → rain at sunrise/sunset** (dim grazing sun on freshly-wet
-  stone), not at rain noon.
-- `hemi.color` lerps toward the fog color under cloud. The ambient
-  bouncing on wet stone is now grey under rain, not blue. Helps verisimilitude
-  but means the cool-blue "wet" cast you might expect comes from the
-  *fog/cloud color choice*, not from the lighting.
-- `directionalLight.color` cools slightly under cloud. Specular highlights
-  on wet stone under rain will read very slightly cool — not a bug.
-- **Likely Day 4 follow-up: an env map for IBL.** Wet stone at roughness 0.25
-  will reflect *something*, and without `scene.environment` set that
-  something is black. Rendering the sky to a low-res `PMREMGenerator` cube
-  once per ~30 frames (or whenever weather/time changes by enough) gives
-  the wet stone the cloudy sky to reflect, which is the visual cue that
-  sells "wet" most strongly. If A's `onBeforeCompile` patch goes in clean,
-  add the env map immediately after — without it, wet stone looks plastic.
-
-### Steps
-
-1. **Add `wetness` to the weather state.**
-   - Add `wetness: 0.0/0.4/1.0` to the three presets in `src/weather.js`.
-   - Add `wetness` to `SCALAR_KEYS` so `updateWeather` lerps it.
-   - Initialize `current.wetness = WEATHER_PRESETS.clear.wetness`.
-
-2. **Load the glTF.**
-   - `import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';`
-   - In a new `loadCampanile(scene)` factory: `new GLTFLoader().loadAsync('/campanile/assets/campanile.glb')`
-     (mind the Vite `base` — the path needs the `/campanile/` prefix in prod).
-   - On load: traverse the scene, set `castShadow = receiveShadow = true` on
-     every Mesh, swap or patch the material per step 3, add to scene, return
-     the root.
-   - Handle missing-asset failure gracefully: log a warning, keep the
-     cylinder as fallback so the demo still runs.
-
-3. **Patch the material via `onBeforeCompile`.**
-   - In `loadCampanile`, traverse meshes; for each `MeshStandardMaterial`:
-     - Add `material.userData.wetness = { value: 0.0 }` and reference it
-       inside `onBeforeCompile` (`shader.uniforms.wetness = material.userData.wetness`).
-     - Inject a `#include <roughnessmap_fragment>` replacement that does
-       `roughnessFactor = mix(roughnessFactor, 0.25, wetness);`.
-     - Inject a `#include <map_fragment>` replacement that does
-       `diffuseColor.rgb *= mix(1.0, 0.78, wetness);`.
-     - Optional: weight wet effect by `max(0.0, vNormal.y)` so undersides
-       stay drier.
-   - Stash the material refs (or just the userData uniform refs) on a
-     module array so the per-frame loop can update `wetness` cheaply.
-
-4. **Wire it in `main.js`.**
-   - Replace `addTowerPlaceholder` with `await loadCampanile(scene)` (top
-     of the module — Vite supports top-level await). Keep the cylinder as
-     a fallback path inside the loader on error.
-   - In `pushWeatherToScene()`: iterate the wet-material refs and set
-     `userData.wetness.value = weatherCurrent.wetness`.
-
-5. **Verification.**
-   - Real (or placeholder) glTF visible centered on origin, ~94 m tall,
-     casting and receiving shadows like the cylinder did.
-   - Switch `weather` clear → rain: stone gets noticeably darker over
-     ~1.5 s. Roughness drop is verifiable at the clear/rain *boundary*
-     during sunrise (time ≈ 6.5–7.0): the dim grazing sun should produce
-     visibly sharper rim highlights on wet stone than on dry. **Do not**
-     verify wet specular at rain noon — direct sun is at 15% there, so
-     specular pop is intentionally muted.
-   - rain → clear: dries out smoothly. Highlights soften back toward
-     diffuse over ~1.5 s as roughness rises.
-   - If wet stone reads "plasticky" or pure-black on the shadowed side,
-     that's the missing env map (see Interaction note). Add IBL via
-     `PMREMGenerator` from the sky.
-   - No new shader compile errors. Check browser console for
-     `THREE.WebGLProgram` warnings.
-
-### Out of scope for Day 4 (do NOT do)
-
-- No rain particles — Day 6.
-- No procedural cracks, moss, or normal maps not already on the model.
+- No rain particles — Day 6 (now next).
+- No procedural cracks, moss, or normal maps.
 - No physically-correct puddle pooling or screen-space reflections.
-- No swap to a custom BRDF unless option A actually fails.
-- No new Tweakpane controls. `wetness` is derived from `weather`, not a
-  user knob.
-- No commit. User commits manually.
+- No new Tweakpane controls — `wetness` derived from `weather`.
+- No retuning of Day 3 lighting.
 
-Keep `main.js` under 200 lines. If glTF loading + material patching pushes
-it over, factor `loadCampanile` and the material patcher into
-`src/stone.js` (a new file).
+---
+
+## Day 5 — SKIPPED
+
+Tone.js bell synthesis is dropped. We will not add audio to the project.
+Roadmap and deliverables go straight from Day 4 to Day 6.
+
+---
+
+## Day 6 — PLAN (next)
+
+Headline: rain particles. While we're in there, add a few small
+weather-driven effects that fill obvious gaps the previous days exposed
+(empty night sky, missing storm drama, missing audio replaced with visual
+weather cues).
+
+### Goals (in priority order)
+
+1. **Rain particles.** Visible falling streaks during `rain`, faint
+   drizzle during `overcast`, none in `clear`. Density driven by
+   `weatherCurrent.cloudCover` (or a new derived `rainStrength`), with
+   the same 1.5 s cross-fade as everything else. Streaks have wind drift
+   and a slight forward tilt.
+2. **Lightning flash.** Rare random pulses during `rain` only — bright
+   directional-light boost + sky exposure spike for a few frames, then
+   exponential decay. Optional follow-up flicker. Probability scales with
+   `rainStrength`. Acts as the visual equivalent of the audio drama we're
+   not building.
+3. **Stars + moon at night.** The night-floor change in Day 4 left the
+   sky genuinely dark, which made the empty dome obvious. Add a fixed
+   star field (rendered into the existing sky shader or as a separate
+   pass) and a simple moon disc that follows an opposite arc to the sun.
+   Both fade in/out with `smoothstep(_sunDir.y, 0.0, -0.1)` so they only
+   appear after dusk.
+4. **Distant lightning ambient flash on cloud.** If lightning ships
+   cleanly, modulate `cloudCover` brightness for a subset of pulses so
+   the cloud layer flashes from within (heat-lightning look) without a
+   visible bolt. Cheap and atmospheric.
+5. **Polish sweep.** Walk through dawn / noon / dusk / midnight under
+   each of the three weather states and fix any remaining transition
+   pops, NaN pixels, or shadow-frustum artifacts.
+
+### File plan
+
+- `src/rain.js` (new) — particle system. `Points` with a custom
+  `ShaderMaterial` (streak quads via `gl_PointSize` + texture, OR an
+  `InstancedMesh` of thin lines if streaks need real length).
+  `setRainStrength(value)` exported, called from `pushWeatherToScene()`.
+  Wraps particles around the camera so the rain volume travels with
+  the viewer.
+- `src/sky.js` (new) — moves the sky factory + new stars/moon code out
+  of `main.js`. Or extend `shaders/sky.frag.glsl` directly with a
+  procedural star sample and a moon disc; keep the file boundary
+  whichever way is cleaner.
+- `src/lightning.js` (new) — randomized pulse scheduler. Holds onto
+  `directionalLight` + `sky.material` references and drives short
+  intensity/exposure spikes. Exposes `updateLightning(dt, scene)`.
+- `src/main.js` — wire the three new modules into `render()` and
+  `pushWeatherToScene()`. Should still stay in the ~200-line
+  neighborhood.
+- `src/ui.js` — possibly add a `lightning` toggle (so demo can be
+  forced/suppressed). No new sliders unless we add a fourth weather
+  state (we won't this phase).
+
+### Constraints
+
+- Per-frame allocations stay zero — pre-allocate buffers, reuse vectors.
+- Particles are GPU-driven where possible. CPU per-particle work caps
+  at maybe a few thousand (camera-relative wrap math).
+- New systems must respect `params.showShadows` if they cast shadows
+  (probably they don't — rain/stars/moon shouldn't).
+- Wet-stone shader stays untouched. Rain *amount* and stone *wetness*
+  are two different sliders driven by the same weather state; don't
+  conflate them.
+- No commit until user signs off. User commits manually.
+
+### Stretch (only if time permits and the headline ships clean)
+
+- Subtle ground darkening / puddle reflectance under rain — a roughness
+  modulation on the grass plane, not real puddles.
+- Wind direction visible in subtle tree/grass motion (we don't have
+  trees yet, so this is really "rain wind direction").
+- Streaks bias toward the camera direction so close drops read as
+  forward streaks vs. distant drops as point dots.
+
+### Out of scope for Day 6 (do NOT do)
+
+- No bell audio. No audio at all.
+- No real volumetric rain or volumetric clouds.
+- No screen-space god rays / lens flare.
+- No fourth weather state ("snow", "storm", etc.) — keep the trio.
+- No new physics. Rain is purely visual.
 
 ---
 
@@ -484,8 +556,8 @@ it over, factor `loadCampanile` and the material patcher into
 | --- | -------------------------------------------------------------------- |
 | 3   | Weather state machine — clear/rain/overcast cloud cover, fog density |
 | 4   | Wet stone PBR shader + glTF Campanile model load                     |
-| 5   | Tone.js bell synthesis (Westminster chimes on the hour)              |
-| 6   | Rain particles, weather transitions, polish                          |
+| 5   | SKIPPED — Tone.js bell synthesis is dropped, no audio                |
+| 6   | Rain particles + lightning + stars/moon, polish                      |
 | 7   | Report HTML, GitHub Pages deploy, demo prep                          |
 
 ---

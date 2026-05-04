@@ -1,12 +1,14 @@
 import { Pane } from 'tweakpane';
+import { setLightningEnabled } from './lightning.js';
 
 // State object the UI mutates. main.js holds the canonical reference and reads
-// from it each frame. Day 1 just logs changes; later days will wire effects.
+// from it each frame.
 export const params = {
   timeOfDay: 12,
   dayOfYear: 172,
   weather: 'clear',
   showShadows: true,
+  lightning: true,
 };
 
 export function initUI() {
@@ -20,9 +22,11 @@ export function initUI() {
     options: { clear: 'clear', rain: 'rain', overcast: 'overcast' },
   });
 
+  pane.addBinding(params, 'showShadows', { label: 'Show shadows' });
+
   pane
-    .addBinding(params, 'showShadows', { label: 'Show shadows' })
-    .on('change', (ev) => console.log('showShadows', ev.value));
+    .addBinding(params, 'lightning', { label: 'Lightning' })
+    .on('change', (ev) => setLightningEnabled(ev.value));
 
   return pane;
 }
