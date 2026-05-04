@@ -361,6 +361,29 @@
     }
 
     /* ── RESULTS ── */
+    .showcase-video {
+      width: 100%;
+      margin: 0 0 2.5rem;
+      border: 1px solid var(--mist);
+      background: #000;
+      display: block;
+    }
+
+    .showcase-video video {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .showcase-caption {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--stone);
+      letter-spacing: 0.05em;
+      line-height: 1.5;
+      margin: -1.75rem 0 2.5rem;
+    }
+
     .results-intro {
       margin-bottom: 3rem;
     }
@@ -688,6 +711,15 @@
   <section id="results">
     <div class="section-eyebrow">03 · Results</div>
     <h2>Rendered Outputs</h2>
+
+    <div class="showcase-video">
+      <video autoplay loop muted playsinline preload="metadata" poster="afternoon_clear.png">
+        <source src="showcase.mp4" type="video/mp4" />
+        Your browser does not support embedded video. <a href="showcase.mp4">Download the showcase clip</a>.
+      </video>
+    </div>
+    <div class="showcase-caption">Final showcase clip — the live renderer cycling through times of day and weather presets. For the full interactive experience, <a href="./demo.html">launch the live demo</a>.</div>
+
     <div class="results-intro">
       <p>The following renders were captured directly from the live browser application by fixing time-of-day, day-of-year, and weather preset in the Tweakpane UI. No post-processing was applied. Each image demonstrates a specific combination of solar position, seasonal geometry, and atmospheric condition that the physical models are designed to reproduce.</p>
     </div>
