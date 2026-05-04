@@ -7,6 +7,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
   <style>
     :root {
       --ink: #0f0e0c;
@@ -331,6 +338,28 @@
       margin: 0;
     }
 
+    .tech-card .equation {
+      margin: 0.85rem 0 0.25rem;
+      padding: 0.6rem 0.8rem;
+      background: rgba(245,240,232,0.55);
+      border-left: 2px solid var(--gold);
+      font-size: 0.86rem;
+      color: var(--ink);
+      overflow-x: auto;
+    }
+
+    .tech-card .equation + p {
+      margin-top: 0.85rem;
+    }
+
+    .equation-caption {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--stone);
+      letter-spacing: 0.04em;
+      margin-top: 0.3rem;
+    }
+
     /* ── RESULTS ── */
     .results-intro {
       margin-bottom: 3rem;
@@ -599,12 +628,23 @@
       <div class="tech-card">
         <div class="tech-card-num">01</div>
         <div class="tech-card-title">Solar Positioning</div>
-        <p>Sun azimuth and altitude are computed from first principles using standard solar geometry equations (declination from a single-sine seasonal model, hour angle, altitude, and azimuth), anchored to Berkeley's GPS coordinates (37.87°N, 122.26°W) with a longitude correction and DST offset. The resulting unit vector drives the directional light, shadow camera frustum, and sky shader every frame. Validated to within ~1° against published solstice/equinox values for Berkeley.</p>
+        <p>Sun azimuth and altitude are computed from first principles using standard solar geometry equations, anchored to Berkeley's GPS coordinates (37.87°N, 122.26°W) with a longitude correction and DST offset. The resulting unit vector drives the directional light, shadow camera frustum, and sky shader every frame.</p>
+        <div class="equation">
+          $$\delta = 23.45° \,\sin\!\left(\tfrac{360°\,(284 + N)}{365}\right)$$
+          $$\sin\alpha = \sin\phi\,\sin\delta + \cos\phi\,\cos\delta\,\cos h$$
+          <div class="equation-caption">N = day-of-year, φ = latitude, h = hour angle, δ = declination, α = altitude.</div>
+        </div>
+        <p>The single-sine declination model is a deliberate simplification of the full NOAA SPA — sufficient for an interactive seasonal slider, validated to within ~1° at solstice noon and equinox sunrise.</p>
       </div>
       <div class="tech-card">
         <div class="tech-card-num">02</div>
         <div class="tech-card-title">Preetham Sky Shader</div>
-        <p>A custom GPU sky dome renders the full atmosphere using the Preetham et al. (1999) analytical sky model. The fragment shader computes per-pixel luminance and chromaticity from the angle between each sky direction and the sun, modulated by turbidity. A procedural cloud layer blended via two incommensurate sine waves adds gentle "breathing" to the overcast preset, eliminating the static feel of a fixed cloud cover value.</p>
+        <p>A custom GPU sky dome renders the full atmosphere using the Preetham et al. (1999) analytical sky model. The fragment shader evaluates the per-pixel luminance distribution from the angle to the zenith and the angle to the sun, modulated by turbidity:</p>
+        <div class="equation">
+          $$F(\theta, \gamma) = (1 + A\,e^{B / \cos\theta})\,(1 + C\,e^{D\gamma} + E\,\cos^2\gamma)$$
+          <div class="equation-caption">θ = angle from zenith, γ = angle from sun, A–E = turbidity-dependent coefficients (we use T = 2.5 for clear, T = 8 for storms).</div>
+        </div>
+        <p>A procedural cloud layer is amplitude-modulated by two incommensurate sines on the CPU, $c(t) = c_0 + 0.04\,\sin(0.13\,t) + 0.03\,\sin(0.07\,t)$, adding gentle sub-perceptual "breathing" that kills the static feel of a fixed cloud-cover value.</p>
       </div>
       <div class="tech-card">
         <div class="tech-card-num">03</div>
@@ -619,7 +659,16 @@
       <div class="tech-card">
         <div class="tech-card-num">05</div>
         <div class="tech-card-title">Weather &amp; Atmosphere</div>
-        <p>Three weather presets (clear, overcast, rain) smoothly interpolate fog color, fog density, cloud cover, turbidity, and rain strength. Exponential fog density increases 1.5× near dawn and dusk to mimic morning mist. The fog color is dimmed with the sun's elevation so nighttime fog reads dark rather than the daytime horizon color. A wet BRDF mode lowers roughness and raises metalness on the stone to simulate rain-soaked surfaces.</p>
+        <p>Three weather presets (clear, overcast, rain) smoothly interpolate fog color, fog density, cloud cover, turbidity, and rain strength. Exponential fog density is multiplicatively boosted near dawn and dusk to mimic morning mist:</p>
+        <div class="equation">
+          $$\sigma(t) = \sigma_{\text{base}} \cdot \mathrm{lerp}\!\left(1.5,\, 1.0,\, \mathrm{smoothstep}(s_y;\, 0.05,\, 0.4)\right)$$
+          <div class="equation-caption">σ = fog density, s_y = vertical component of sun direction. Density falls from 1.5× to 1× as the sun climbs above the horizon.</div>
+        </div>
+        <p>The fog color is dimmed with the sun's elevation so nighttime fog reads dark rather than the daytime horizon color. A wet BRDF mode lowers stone roughness with the wetness scalar w ∈ [0, 1]:</p>
+        <div class="equation">
+          $$r(w) = (1 - w)\,r_{\text{dry}} + w\,r_{\text{wet}} = 0.85 - 0.60\,w$$
+          <div class="equation-caption">r_dry = 0.85 (matte stone), r_wet = 0.25 (rain-slicked, near-specular).</div>
+        </div>
       </div>
       <div class="tech-card">
         <div class="tech-card-num">06</div>
