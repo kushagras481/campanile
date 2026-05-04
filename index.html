@@ -700,7 +700,7 @@
     </div>
 
     <h3>Implementation Stack</h3>
-    <p>The renderer is built on <strong>Three.js r165</strong> over WebGL 2.0, bundled with <strong>Vite</strong>, and hosted on GitHub Pages. The sky uses custom GLSL shaders loaded as raw strings; the stone uses Three.js's standard PBR material patched via <code>onBeforeCompile</code>, which lets us inject procedural weathering and the wet-state interpolation without forking the whole shader. The UI is <strong>Tweakpane</strong>: time-of-day, day-of-year, weather, and the shadow / lightning toggles are all live-bound to the render loop.</p>
+    <p>The renderer is built on <strong>Three.js r160</strong> over WebGL 2.0, bundled with <strong>Vite</strong>, and hosted on GitHub Pages. The sky uses custom GLSL shaders loaded as raw strings; the stone uses Three.js's standard PBR material patched via <code>onBeforeCompile</code>, which lets us inject procedural weathering and the wet-state interpolation without forking the whole shader. The UI is <strong>Tweakpane</strong>: time-of-day, day-of-year, weather, and the shadow / lightning toggles are all live-bound to the render loop.</p>
 
     <h3>Performance</h3>
     <p>The scene holds 60 fps at 1440p on an Apple M2 MacBook Pro at roughly 35% GPU utilization. The biggest per-frame cost is the 2048² shadow map, which is regenerated every frame so it tracks the sun. A PMREM-prefiltered environment map provides approximate reflections on wet stone; we rebuild it at 2 Hz instead of every frame, since the sky changes slowly with time-of-day and a half-second cadence is invisible.</p>
@@ -892,7 +892,7 @@
       </li>
       <li>
         <span class="ref-num">[4]</span>
-        <span>Three.js r165 documentation and source. WebGL 2.0 renderer, PBR materials, shadow mapping, and orbit controls. <a href="https://threejs.org/docs/" target="_blank">threejs.org/docs</a></span>
+        <span>Three.js r160 documentation and source. WebGL 2.0 renderer, PBR materials, shadow mapping, and orbit controls. <a href="https://threejs.org/docs/" target="_blank">threejs.org/docs</a></span>
       </li>
       <li>
         <span class="ref-num">[5]</span>
